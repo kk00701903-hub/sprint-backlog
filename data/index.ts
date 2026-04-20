@@ -1,0 +1,2664 @@
+import type { Sprint } from '@/lib/index';
+
+// 서선범(TFT팀장)은 lib/index.ts TEAM_MEMBERS에 정의 — data에서는 직접 리터럴 사용
+const _서선범 = { name: '서선범', role: 'TFT팀장' as const, area: '아키텍처 총괄·승인' };
+void _서선범; // ESLint unused-vars 방지 (TEAM_MEMBERS 목록 일관성 유지용)
+const 기충영 = { name: '기충영', role: 'PL' as const, area: '기술 리드·MR 승인' };
+const 심지훈 = { name: '심지훈', role: 'PE' as const, area: '백엔드·인프라' };
+const 김희찬 = { name: '김희찬', role: 'PE' as const, area: '백엔드·API' };
+const 송민준 = { name: '송민준', role: 'PE' as const, area: '프론트엔드' };
+const 이지상 = { name: '이지상', role: 'PE' as const, area: '프론트엔드·UI' };
+const 오준열 = { name: '오준열', role: 'PE' as const, area: '풀스택' };
+
+export const SPRINTS: Sprint[] = [
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 1 — 개발 환경 및 인프라 기반
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-1', number: 1,
+    title: '개발 환경 및 인프라 기반 구축',
+    subtitle: 'Dev Environment & Infrastructure',
+    description: 'Docker 컨테이너 표준화, GitLab Git-Flow, Jenkins CI/CD, ESLint/Prettier/SonarQube 코드 품질 체계를 완비합니다.',
+    status: 'done', priority: 'high', duration: '2주', phase: 'Phase 0',
+    guideSection: '2장·3장·4장', icon: '🏗️',
+    techStack: ['Docker', 'Docker Compose', 'GitLab', 'Jenkins', 'SonarQube', 'ESLint', 'Prettier', 'IntelliJ IDEA'],
+    goal: {
+      summary: '"내 PC에서만 됩니다" 문제를 Docker로 원천 차단하고, 커밋→빌드→배포를 완전 자동화한다',
+      problem: '개발자마다 JDK·Node 버전, OS 차이로 환경 셋업 1~2일 소요. 브랜치 전략 없어 main 직접 push로 운영 장애 발생. 코드 스타일 제각각으로 리뷰 비용 낭비',
+      objective: 'docker-compose up 단일 명령으로 전체 로컬 환경 기동. Git-Flow + Jenkins로 커밋→자동빌드→SonarQube→DEV 배포 파이프라인 완성',
+      deliverables: ['docker-compose.yml (PostgreSQL·Redis·Kafka)', 'Jenkinsfile (Pipeline as Code)', 'Git-Flow 브랜치 운영 규칙 문서', '.editorconfig + eslintrc + prettier 설정 파일', 'SonarQube Quality Gate 기준 (커버리지 80%, 신규 버그 0)'],
+      dependencies: [],
+    },
+    ossDetails: [
+      {
+        name: 'Docker & Docker Compose',
+        version: 'Docker 26.x / Compose v2',
+        role: '컨테이너 기반 개발·운영 환경 표준화 — "내 PC에서만 됨" 문제 원천 차단',
+        why: 'OS 무관 동일 환경 보장, Multi-stage Build로 이미지 크기 최소화, Compose로 로컬 인프라(DB·캐시·메시지큐) 단일 명령 기동',
+        setupSteps: [
+          '① Docker Desktop 설치 (Windows/macOS) — RAM 최소 4GB 할당',
+          '② docker login nexus.jette.com — 사내 Nexus Registry 인증',
+          '③ Backend Dockerfile: gradle:8.5-jdk21-alpine 빌드 → openjdk:21-slim 런타임, non-root appuser 실행',
+          '④ Frontend Dockerfile: node:20-alpine deps → builder → runner 3단계',
+          '⑤ docker-compose.yml: postgres:15, redis:7-alpine, kafka:3.x 서비스 정의',
+          '⑥ 팀 공통 .env.example 파일 작성 및 .gitignore 등록',
+        ],
+        keyConfig: 'RUN addgroup -S appgroup && adduser -S appuser -G appgroup && USER appuser',
+        pitfalls: ['이미지에 .env 파일 직접 포함 금지 — ARG/ENV 또는 Compose env_file 사용', 'COPY .. 전에 의존성 레이어 별도 캐시 (package.json 먼저 COPY)', 'M1/ARM Mac에서 --platform=linux/amd64 플래그 필요할 수 있음'],
+        references: ['3.5절 Docker 기반 컨테이너 환경 설정', 'https://docs.docker.com/build/building/multi-stage/'],
+      },
+      {
+        name: 'SonarQube',
+        version: '10.x Community',
+        role: '서버 중앙 코드 품질 분석 — develop 병합 시 자동 정밀 분석 및 Quality Gate 차단',
+        why: '커버리지·버그·보안 취약점을 수치화하여 팀 전체 기준 통일. SonarLint Connected Mode로 IDE 실시간 동기화',
+        setupSteps: [
+          '① Docker로 SonarQube 서버 기동 (sonarqube:10-community)',
+          '② 프로젝트 생성 및 토큰 발급',
+          '③ Jenkins Pipeline에 SonarQube Scanner 플러그인 설치',
+          '④ Jenkinsfile에 sonarqube-analysis 스테이지 추가',
+          '⑤ Quality Gate: 신규 버그 0, 커버리지 80%, Critical 취약점 0 설정',
+          '⑥ 개발자 IntelliJ SonarLint Connected Mode 설정 (서버 URL + 토큰)',
+        ],
+        keyConfig: 'sonar.projectKey=fass-backend, sonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco.xml',
+        pitfalls: ['Quality Gate 실패 시 Jenkins 빌드 FAIL 처리 필수 (waitForQualityGate)', 'SonarLint Connected Mode 미설정 시 서버 규칙과 로컬 규칙 불일치'],
+        references: ['2.2.2절 SonarQube 서버 분석', '4.3절 CI/CD 파이프라인'],
+      },
+      {
+        name: 'Nexus Repository — 별도 서버 분리 구성 (인터넷 가능)',
+        version: 'Nexus Repository Manager 3.x OSS',
+        role: '운영 서버와 물리적으로 분리된 전용 Nexus 서버에서 Maven·npm·Docker 레지스트리를 운영하며, 인터넷을 통해 외부 저장소를 프록시하여 사내 개발망에 안전하게 제공',
+        why: '운영 서버는 보안 정책상 인터넷 차단(망 분리). Nexus 서버만 인터넷을 허용하여 Maven Central·npm Registry를 프록시 캐시 → 개발망은 Nexus만 바라보면 됨. 운영 서버와 분리함으로써 Nexus 장애·업그레이드 시 운영 영향 없음. 사내 사설 Docker Registry 역할도 병행',
+        setupSteps: [
+          '① 별도 서버 준비: CPU 4코어·RAM 8GB·SSD 500GB 이상 (Nexus 권장 사양)',
+          '② 네트워크 구성: Nexus 서버는 인터넷 아웃바운드 허용 + 사내 개발망 인바운드 허용 (운영망은 Nexus 접근만 허용)',
+          '③ Docker Compose로 Nexus 기동: sonatype/nexus3 컨테이너, /nexus-data 영구 볼륨 마운트',
+          '④ Proxy 저장소 생성: maven-central-proxy (https://repo1.maven.org/maven2/), npmjs-proxy (https://registry.npmjs.org/), docker-hub-proxy',
+          '⑤ Hosted 저장소 생성: fass-releases (정식 배포), fass-snapshots (개발 스냅샷), fass-docker (사내 Docker 이미지)',
+          '⑥ Group 저장소 생성: fass-all (proxy + hosted 묶음) → 개발자는 이 URL 하나만 사용',
+          '⑦ 방화벽 규칙: Nexus 서버 8081(Maven/npm) + 8082(Docker Registry) 포트만 개발망 허용',
+          '⑧ SSL/TLS: Nginx 역방향 프록시로 nexus.jette.com HTTPS 인증서 적용',
+          '⑨ 주기적 캐시 정리: Compact Blob Store 스케줄러 설정 (주 1회)',
+        ],
+        keyConfig: `# docker-compose.yml (Nexus 전용 서버)
+services:
+  nexus:
+    image: sonatype/nexus3:latest
+    container_name: nexus
+    restart: always
+    ports:
+      - "8081:8081"   # Maven / npm
+      - "8082:8082"   # Docker Registry
+    volumes:
+      - nexus-data:/nexus-data
+    environment:
+      - INSTALL4J_ADD_VM_PARAMS=-Xms2g -Xmx4g -XX:+UseG1GC
+volumes:
+  nexus-data:`,
+        pitfalls: [
+          'Nexus 서버의 인터넷 허용은 아웃바운드(외부→인터넷)만 허용, 인바운드(인터넷→Nexus)는 차단 (공격 노출 방지)',
+          'Nexus 서버 디스크 용량 모니터링 필수 — 캐시 미정리 시 디스크 풀 차서 빌드 전면 중단 위험',
+          'Docker Registry(8082) HTTPS 미적용 시 /etc/docker/daemon.json에 insecure-registries 등록 필요 — 운영 환경에서는 반드시 HTTPS 적용',
+          'Nexus 서버 장애 = 전체 빌드 불가 → 모니터링 알림(CPU·디스크·응답속도) + 백업 정책 수립 필수',
+          '운영 서버에서 Nexus 직접 접근 시 최소 권한 읽기 전용 계정 사용 (write 권한 부여 금지)',
+        ],
+        references: ['Sprint 19 골든셋 — 승인 저장소', '3.5절 인프라 구성', 'Nexus Repository 공식 문서'],
+      },
+      {
+        name: 'GitLab — 형상관리(SCM) & Git-Flow 운영',
+        version: 'GitLab CE 16.x (Self-hosted)',
+        role: '소스코드 버전 관리(형상관리) 중앙 서버 — Git-Flow 브랜치 전략, MR 코드 리뷰, Branch Protection, CI/CD 트리거 원점',
+        why: '별도 형상관리 시스템 없으면 Git을 사용한다. FaSS 가이드라인에서 버전 관리·이력 추적·협업 표준으로 GitLab을 채택. Branch Protection으로 main 직접 push 방지, MR Approve 정책으로 코드 품질 최소 보장. Jenkins Webhook 연동으로 커밋→빌드 자동화 원점 역할.',
+        setupSteps: [
+          '① GitLab Self-hosted 서버 설치 (docker run gitlab/gitlab-ce) 또는 GitLab.com 사용',
+          '② 프로젝트(Repository) 생성: fass-backend, fass-frontend, fass-infra, fass-config-repo',
+          '③ Git-Flow 브랜치 구조 설정: main(운영), develop(통합), release/*, hotfix/*, feature/*',
+          '④ Branch Protection 설정: main·develop 직접 push 차단, MR 필수, Approve 최소 1인',
+          '⑤ Merge Request 템플릿 작성: 변경 요약, 테스트 결과, 체크리스트 포함',
+          '⑥ Jenkins Webhook 연동: Push Event → Jenkins Pipeline 자동 트리거',
+          '⑦ SSH 키 기반 접근 설정 (CI/CD 서버, Config Server 인증용)',
+          '⑧ .gitignore 표준 템플릿 적용: .env, *.jar, build/, dist/, .gradle/ 제외',
+          '⑨ Git Commit Message 컨벤션 가이드 배포: feat/fix/docs/refactor/chore/test 타입 규칙',
+        ],
+        keyConfig: `# 브랜치 명명 규칙 (4.2절)
+feature/JIRA-123-login-jwt     # 기능 개발
+bugfix/JIRA-456-null-pointer   # 버그 수정
+release/v1.2.0                 # 릴리즈 준비
+hotfix/v1.2.1-security-patch   # 긴급 패치
+
+# Git Commit Message 컨벤션
+feat: 로그인 JWT 발급 API 구현      # 신규 기능
+fix: 토큰 만료 처리 오류 수정       # 버그 수정
+refactor: 인증 서비스 레이어 분리   # 리팩터링
+chore: .gitignore node_modules 추가 # 설정/잡무`,
+        pitfalls: [
+          '.env, application-prod.yml 등 민감 정보 Git 커밋 절대 금지 — .gitignore 등록 및 git-secrets 도구 적용 권장',
+          'Gradle 캐시(.gradle/), 빌드 결과물(build/, dist/) Git 추적 제외 (.gitignore 필수)',
+          'main 브랜치 직접 push 시 운영 장애 이력 → Branch Protection 설정 완료 전 운영 연결 금지',
+          'MR Approve 없이 병합 허용 시 코드 리뷰 형식화 → GitLab Approval Rules 강제 적용',
+          'Commit Message 컨벤션 미준수 시 Changelog 자동 생성 불가 → .commitlintrc 또는 팀 가이드 교육 필요',
+          'GitLab 서버 장애 = 전체 개발 중단 → 정기 백업(gitlab-backup-cron) 및 DR 계획 수립',
+        ],
+        references: ['4.2절 Git-Flow 브랜치 전략', '4.3절 CI/CD 파이프라인', '15장 명명 규칙'],
+      },
+      {
+        name: 'Jira — 협업 및 태스크 관리',
+        version: 'Jira Software (Cloud 또는 Server)',
+        role: '프로젝트의 모든 요구사항·작업·버그를 추적·관리하는 핵심 협업 도구. 모든 개발 활동은 Jira 티켓(Epic/Story/Task/Bug) 기반으로 진행',
+        why: '구두 보고·이메일 공유 방식에서 탈피. 진행 상태 실시간 가시화. GitLab Smart Commits 연동으로 커밋-코드-이슈 자동 연결. 스프린트 번인 차트·벨로시티로 팀 생산성 측정 가능',
+        setupSteps: [
+          '① Jira 프로젝트 생성: 프로젝트 키 FASS, 스크럼 방법론 선택',
+          '② 이슈 타입 구성: Epic → Story → Task → Sub-task / Bug 트리 구조 설정',
+          '③ 워크플로우 설정: To Do → In Progress → In Review → Done',
+          '④ 팀원 계정 초대 및 역할(Developer/Reporter/Viewer) 부여',
+          '⑤ GitLab 연동: GitLab ↔ Jira 플러그인 설치 → Smart Commits 활성화',
+          '⑥ Smart Commits 규칙 교육: "FASS-123 feat: 로그인 JWT 구현 #in-progress" 형식',
+          '⑦ MR 연동: GitLab MR 생성 시 Jira 이슈 링크 → Merge 시 자동 Done 전환',
+          '⑧ Definition of Done 정의: 코드 리뷰 완료 + Quality Gate 통과 + 테스트 작성',
+          '⑨ 스프린트 보드 설정: 2주 단위 스프린트, 번인 차트·벨로시티 리포트 활성화',
+        ],
+        keyConfig: `# Git Commit Message + Jira Smart Commits 연동
+FASS-123 feat: 로그인 JWT 발급 API 구현 #in-progress
+FASS-124 fix: 토큰 만료 처리 오류 수정 #done #time 2h
+FASS-125 refactor: 인증 서비스 레이어 분리 #comment 리팩터링 완료
+
+# 이슈 타입 계층 구조
+Epic  : FaSS 플랫폼 개발 Phase 1
+  └ Story : 로그인 JWT 인증 구현 (FASS-100)
+      └ Task : JwtTokenProvider 개발 (FASS-123)
+          └ Sub-task : AccessToken 발급 로직 (FASS-124)`,
+        pitfalls: [
+          'Jira 티켓 없이 커밋하면 변경 이력 추적 불가 → 커밋 전 Jira 티켓 ID 입력 규칙 필수화',
+          'Smart Commits 미설정 시 GitLab과 Jira 이슈 연동 안 됨 → 플러그인 설치 및 테스트 필수',
+          '스프린트 계획 없이 백로그만 쌓이면 번인 차트 의미 없음 → 매 스프린트 시작 전 계획 회의 필수',
+          'Jira 이슈 상태를 실시간으로 업데이트하지 않으면 보드가 현실을 반영 못 함 → 팀 문화 정착 필요',
+        ],
+        references: ['4.4절 협업 및 태스크 관리(Jira)', 'GitLab-Jira 연동 가이드'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us1-1', asA: '신규 개발자', iWantTo: 'git clone 후 docker-compose up 한 줄로 로컬 환경을 기동하고 싶다',
+        soThat: '환경 구성에 소요되는 온보딩 시간을 1시간 이내로 단축할 수 있다',
+        asBefore: 'JDK·DB 설정 차이로 환경 구성 1~2일 소요. 누락 설정 문의 빈번',
+        toBe: 'docker-compose up 실행 시 PostgreSQL·Redis 즉시 기동. README 5분 내 로컬 서버 실행 완료',
+        priority: 'high', status: 'done', storyPoints: 5,
+        acceptanceCriteria: ['docker-compose up 시 PostgreSQL(5432)·Redis(6379) 정상 기동', 'Backend Multi-stage 최종 이미지 200MB 이하', 'docker login nexus.jette.com 후 이미지 pull 성공'],
+        tasks: [
+          { id: 't1-1-1', title: 'Backend Multi-stage Dockerfile', description: 'gradle:8.5-jdk21-alpine 빌드 → openjdk:21-slim 런타임, non-root appuser 보안 설정', priority: 'high', status: 'done', assigneeRole: '백엔드', techStack: ['Docker', 'Java 21'], guideRef: '3.5절', estimatedDays: 1 },
+          { id: 't1-1-2', title: 'Frontend Multi-stage Dockerfile', description: 'node:20-alpine deps→builder→runner, NODE_ENV=production', priority: 'high', status: 'done', assigneeRole: '프론트', techStack: ['Docker', 'Next.js'], guideRef: '3.5절', estimatedDays: 1 },
+          { id: 't1-1-3', title: 'docker-compose.yml (PostgreSQL·Redis·Kafka)', description: 'postgres:15, redis:7-alpine, kafka:3.x+zookeeper 서비스 정의, 볼륨 마운트', priority: 'high', status: 'done', assigneeRole: '인프라', techStack: ['Docker Compose'], guideRef: '3.5절', estimatedDays: 1 },
+          { id: 't1-1-4', title: 'IntelliJ 개발환경 표준화 (IDE 플러그인 + 코드스타일 + Format on Save)', description: '2.1절 전체 적용: ① 필수 플러그인 설치(SonarLint·MapStruct Support·CheckStyle-IDEA·JPA Buddy·.ignore / Prettier·ESLint·Tailwind CSS) ② .editorconfig 작성(UTF-8·LF·Java 4sp·TS 2sp) ③ jette-java-style.xml 배포 및 Code Style Import ④ Actions on Save 활성화(Reformat Code·Optimize Imports·Run Prettier) ⑤ Figma Dev Mode 연동 가이드 팀 공유', priority: 'high', status: 'done', assigneeRole: 'PL', techStack: ['IntelliJ IDEA', 'Figma'], guideRef: '2.1절', estimatedDays: 1,
+            subTasks: [
+              { id: 'st1-1-4-1', title: '필수 IDE 플러그인 설치 체크리스트 작성 (백엔드·프론트 구분)', status: 'done' },
+              { id: 'st1-1-4-2', title: '.editorconfig 파일 작성 및 저장소 커밋 (UTF-8·LF·indent 규칙)', status: 'done' },
+              { id: 'st1-1-4-3', title: 'jette-java-style.xml 작성 + IntelliJ Code Style Import 가이드', status: 'done' },
+              { id: 'st1-1-4-4', title: 'Actions on Save 설정 (Format on Save·Optimize Imports·Prettier) 가이드 배포', status: 'done' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'us1-2', asA: 'PL', iWantTo: 'MR 생성 시 코드 리뷰·빌드·SonarQube 분석·DEV 배포가 자동으로 이루어지길 바란다',
+        soThat: '수동 배포 실수 없애고 Quality Gate 미달 코드의 develop 병합을 차단할 수 있다',
+        asBefore: '수동 서버 접속 배포. main 직접 push로 운영 장애 발생 이력',
+        toBe: 'develop 병합→Jenkins 자동 트리거→빌드·테스트·SonarQube→Quality Gate 통과 시 DEV 자동 배포. Mattermost 알림',
+        priority: 'high', status: 'done', storyPoints: 8,
+        acceptanceCriteria: ['feature/* → develop MR 시 Jenkins 파이프라인 자동 실행', 'SonarQube Quality Gate 미통과 시 병합 차단', 'DEV 배포 성공/실패 Mattermost 알림', 'main 브랜치 직접 push 보호(Branch Protection)'],
+        tasks: [
+          { id: 't1-2-1', title: 'Git-Flow 브랜치 전략 설정', description: 'GitLab Branch Protection, MR 최소 Approve 1인, 브랜치 명명 규칙(feature/login-jwt) 가이드', priority: 'high', status: 'done', assigneeRole: 'PL', techStack: ['GitLab'], guideRef: '4.2절', estimatedDays: 1 },
+          { id: 't1-2-2', title: 'Jenkinsfile CI/CD 파이프라인', description: 'Checkout→Gradle Build→JUnit→SonarQube Scanner→Docker Build→DEV 배포', priority: 'high', status: 'done', assigneeRole: '인프라', techStack: ['Jenkins', 'Gradle'], guideRef: '4.3절', estimatedDays: 2 },
+        ],
+      },
+      {
+        id: 'us1-3', asA: '인프라 담당자', iWantTo: 'Nexus Repository를 운영 서버와 완전히 분리된 전용 서버에 구성하고 인터넷을 통해 외부 라이브러리를 프록시하고 싶다',
+        soThat: '운영 서버는 인터넷 차단(망 분리)을 유지하면서도 Maven Central·npm 등 외부 라이브러리를 Nexus를 통해 안전하게 사용하고, Nexus 장애·업그레이드가 운영 서비스에 영향을 주지 않을 수 있다',
+        asBefore: 'Nexus가 운영 서버에 함께 배포돼 Nexus 장애 시 운영 영향. 인터넷 접근 정책이 불명확하여 개발자가 Maven Central을 직접 호출',
+        toBe: 'Nexus 전용 서버(nexus.jette.com): 인터넷 아웃바운드만 허용. 개발망 → Nexus 단방향. 운영망 → Nexus 읽기 전용. Maven Central·npm Registry 프록시 캐시 제공',
+        priority: 'high', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: [
+          'Nexus 전용 서버 Docker Compose 기동 (8081 Maven/npm, 8082 Docker Registry)',
+          'maven-central-proxy / npmjs-proxy / docker-hub-proxy 저장소 생성 완료',
+          'fass-releases / fass-snapshots / fass-docker hosted 저장소 생성 완료',
+          'fass-all Group 저장소 → 개발자 단일 URL 사용 검증',
+          'nexus.jette.com HTTPS(Nginx 역방향 프록시) 접근 성공',
+          '운영 서버에서 Nexus 직접 인터넷 호출 없이 빌드 성공',
+        ],
+        tasks: [
+          { id: 't1-3-1', title: 'Nexus 전용 서버 Docker Compose 배포', description: '운영망 분리 서버(CPU 4코어·RAM 8GB·SSD 500GB). sonatype/nexus3, nexus-data 볼륨, JVM(-Xms2g -Xmx4g), 방화벽: 아웃바운드 인터넷 허용', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Nexus 3.x', 'Docker'], guideRef: '3.5절', estimatedDays: 2, subTasks: [{ id: 'st1-3-1-1', title: '전용 서버 방화벽 규칙 설정 (아웃바운드 인터넷 허용)', status: 'todo' }, { id: 'st1-3-1-2', title: 'docker-compose.yml 작성 및 Nexus 기동 확인', status: 'todo' }, { id: 'st1-3-1-3', title: 'nexus-data 볼륨 백업 정책 수립', status: 'todo' }] },
+          { id: 't1-3-2', title: 'Proxy / Hosted / Group 저장소 생성', description: 'maven-central-proxy·npmjs-proxy·docker-hub-proxy / fass-releases·fass-snapshots·fass-docker / fass-all Group', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Nexus 3.x'], guideRef: 'Sprint 19 골든셋', estimatedDays: 2, subTasks: [{ id: 'st1-3-2-1', title: 'Proxy 저장소 3종 (Maven·npm·Docker Hub)', status: 'todo' }, { id: 'st1-3-2-2', title: 'Hosted 저장소 3종 (releases·snapshots·docker)', status: 'todo' }, { id: 'st1-3-2-3', title: 'fass-all Group + 사용자 계정·권한', status: 'todo' }] },
+          { id: 't1-3-3', title: 'Nginx 역방향 프록시 + HTTPS 인증서', description: 'nexus.jette.com 도메인 + 사내 CA 인증서. Nginx upstream: nexus:8081·8082. docker login nexus.jette.com 성공 검증', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Nginx', 'SSL/TLS'], guideRef: 'Sprint 10 Nginx SSL', estimatedDays: 1 },
+          { id: 't1-3-4', title: 'Gradle / npm Nexus 단독 참조 전환', description: 'settings.gradle.kts → fass-all 단독. .npmrc → npmjs-proxy. Maven Central 직접 호출 제거 검증', priority: 'high', status: 'todo', assigneeRole: '백엔드·프론트', techStack: ['Gradle', 'npm'], guideRef: '6.2절', estimatedDays: 1 },
+          { id: 't1-3-5', title: 'Nexus 모니터링 + Compact Blob Store 스케줄러', description: 'Prometheus Nexus Exporter + Grafana 대시보드. Compact Blob 주 1회. 디스크 80% 초과 시 Mattermost 알림', priority: 'medium', status: 'todo', assigneeRole: '인프라', techStack: ['Prometheus', 'Grafana'], guideRef: '모니터링', estimatedDays: 1 },
+        ],
+      },
+      {
+        id: 'us1-4',
+        asA: 'PL / 개발팀 전원',
+        iWantTo: 'GitLab Self-hosted를 팀 형상관리(SCM) 서버로 구성하고 Git-Flow 브랜치 전략·Commit 컨벤션·MR 리뷰 프로세스를 표준화하고 싶다',
+        soThat: '소스코드 변경 이력이 중앙에서 추적되고, main 직접 push 사고를 방지하며, Jenkins CI/CD와 연동해 커밋→자동빌드 파이프라인을 완성할 수 있다',
+        asBefore: '별도 형상관리 서버 없이 개인 Git 저장소 사용 또는 FTP 배포. main 직접 push로 운영 장애 발생. 브랜치 전략·커밋 메시지 규칙 없어 이력 추적 불가',
+        toBe: 'GitLab Self-hosted 운영. feature/*, release/*, hotfix/* 브랜치 자동 보호. MR Approve 1인 필수. feat/fix/refactor 커밋 컨벤션 강제. Push → Jenkins Webhook → 자동빌드',
+        priority: 'high',
+        status: 'done',
+        storyPoints: 5,
+        acceptanceCriteria: [
+          'GitLab 서버 기동 및 fass-backend·fass-frontend·fass-config-repo 저장소 생성 완료',
+          'main·develop 브랜치 직접 push 차단 (Branch Protection 활성화)',
+          'MR Approve 최소 1인 정책 적용 및 MR 템플릿 등록',
+          'Jenkins Webhook 연동 — feature/* push 시 파이프라인 자동 트리거 확인',
+          '.gitignore 표준 (.env, build/, dist/, .gradle/) 모든 저장소 적용',
+          'Git Commit Message 컨벤션 가이드 팀 공유 완료',
+        ],
+        tasks: [
+          {
+            id: 't1-4-1',
+            title: 'GitLab Self-hosted 서버 설치 및 저장소 생성',
+            description: 'docker run gitlab/gitlab-ce. fass-backend·fass-frontend·fass-infra·fass-config-repo 저장소 생성. 팀 계정 초대 및 권한(Developer/Maintainer) 부여',
+            priority: 'high', status: 'done', assigneeRole: '인프라', techStack: ['GitLab CE'], guideRef: '4.2절', estimatedDays: 1,
+            subTasks: [
+              { id: 'st1-4-1-1', title: 'GitLab Docker 컨테이너 기동 및 도메인 설정 (gitlab.jette.com)', status: 'done' },
+              { id: 'st1-4-1-2', title: '저장소 4개 생성 (backend·frontend·infra·config-repo)', status: 'done' },
+              { id: 'st1-4-1-3', title: '팀원 계정 생성 및 역할(Developer/Maintainer) 부여', status: 'done' },
+            ],
+          },
+          {
+            id: 't1-4-2',
+            title: 'Git-Flow 브랜치 전략 + Branch Protection 설정',
+            description: 'main(운영)·develop(통합)·feature/*·release/*·hotfix/* 브랜치 구조 정의. main·develop 직접 push 차단. MR Approve 최소 1인 강제. 브랜치 명명 규칙 가이드 문서화',
+            priority: 'high', status: 'done', assigneeRole: 'PL', techStack: ['GitLab', 'Git-Flow'], guideRef: '4.2절', estimatedDays: 1,
+            subTasks: [
+              { id: 'st1-4-2-1', title: 'main·develop Branch Protection 규칙 설정', status: 'done' },
+              { id: 'st1-4-2-2', title: 'MR Approval Rules (최소 1인) 및 MR 템플릿 등록', status: 'done' },
+              { id: 'st1-4-2-3', title: '브랜치·커밋 메시지 컨벤션 가이드 GitLab Wiki 등록', status: 'done' },
+            ],
+          },
+          {
+            id: 't1-4-3',
+            title: 'Jenkins Webhook 연동 — 커밋→자동빌드 트리거',
+            description: 'GitLab → Jenkins Webhook 설정 (Push Event). feature/* push 시 Jenkins CI 파이프라인 자동 실행. SSH 키 기반 GitLab 인증 (Config Server CI/CD 공용)',
+            priority: 'high', status: 'done', assigneeRole: '인프라', techStack: ['GitLab', 'Jenkins'], guideRef: '4.3절', estimatedDays: 1,
+          },
+          {
+            id: 't1-4-4',
+            title: '.gitignore 표준 템플릿 + git-secrets 도입',
+            description: '.env, application-prod.yml, *.jar, build/, dist/, .gradle/, *.class 제외. git-secrets 도구로 AWS/DB 패스워드 패턴 커밋 시 자동 차단. 팀 공통 .gitignore 템플릿 배포',
+            priority: 'medium', status: 'done', assigneeRole: 'PL', techStack: ['Git', 'git-secrets'], guideRef: '4.2절', estimatedDays: 0.5,
+          },
+        ],
+      },
+      {
+        id: 'us1-5',
+        asA: 'PL / 개발팀 전원',
+        iWantTo: 'Jira를 팀 협업 및 태스크 관리 도구로 도입하여 모든 개발 활동을 Jira 티켓 기반으로 추적하고, GitLab MR과 자동 연동하고 싶다',
+        soThat: '요구사항·작업·버그의 진행 상태를 실시간으로 파악하고, 커밋-코드변경-이슈를 연결하여 추적성(Traceability)을 확보할 수 있다',
+        asBefore: '구두 보고·이메일로 진행 상황 공유. 누가 무엇을 하는지 파악 불가. 코드 변경과 요구사항 이슈 간 연결 없음',
+        toBe: 'Jira 이슈(Epic/Story/Task/Bug) 기반 개발. 커밋 메시지에 Jira 티켓 ID 포함(FASS-123) → GitLab Smart Commits 자동 연동. MR 생성 시 Jira 이슈 자동 업데이트',
+        priority: 'high',
+        status: 'done',
+        storyPoints: 3,
+        acceptanceCriteria: [
+          'Jira 프로젝트 생성 및 팀원 전원 계정 등록',
+          '워크플로우 설정: To Do → In Progress → In Review → Done',
+          'GitLab Smart Commits 연동 — 커밋 메시지 FASS-123 #in-progress 시 Jira 자동 업데이트',
+          'MR 생성 시 Jira 이슈와 연결 및 상태 자동 업데이트',
+          'Jira Board(Scrum)에서 Sprint 백로그 및 진행 상황 확인 가능',
+        ],
+        tasks: [
+          {
+            id: 't1-5-1',
+            title: 'Jira 프로젝트 생성 및 기본 설정',
+            description: 'FaSS 프로젝트 생성 (프로젝트 키: FASS). 스크럼 보드 설정. 이슈 타입(Epic/Story/Task/Bug/Sub-task) 구성. 팀원 계정 초대 및 역할 부여',
+            priority: 'high', status: 'done', assigneeRole: 'PL', techStack: ['Jira'], guideRef: '4.4절', estimatedDays: 0.5,
+            subTasks: [
+              { id: 'st1-5-1-1', title: 'Jira 프로젝트 생성 (FASS) + 스크럼 보드 설정', status: 'done' },
+              { id: 'st1-5-1-2', title: '팀원 계정 초대 및 권한(Developer/Reporter) 부여', status: 'done' },
+              { id: 'st1-5-1-3', title: '이슈 타입·우선순위·라벨 커스텀 설정', status: 'done' },
+            ],
+          },
+          {
+            id: 't1-5-2',
+            title: '워크플로우 표준화 및 Definition of Done 정의',
+            description: 'To Do → In Progress → In Review → Done 표준 워크플로우 설정. Definition of Done: 코드 리뷰 완료 + SonarQube Quality Gate 통과 + 테스트 케이스 작성',
+            priority: 'high', status: 'done', assigneeRole: 'PL', techStack: ['Jira'], guideRef: '4.4절', estimatedDays: 0.5,
+          },
+          {
+            id: 't1-5-3',
+            title: 'GitLab Smart Commits 연동 (커밋 메시지 자동 이슈 업데이트)',
+            description: 'GitLab ↔ Jira 연동 플러그인 설정. 커밋 메시지 규칙: "FASS-123 feat: 로그인 JWT 구현 #in-progress". Jira 이슈 자동 상태 전환 및 시간 기록',
+            priority: 'medium', status: 'done', assigneeRole: '인프라', techStack: ['GitLab', 'Jira'], guideRef: '4.4절', estimatedDays: 1,
+          },
+          {
+            id: 't1-5-4',
+            title: 'MR 연동 — MR 생성 시 Jira 이슈 자동 업데이트',
+            description: 'GitLab MR 설명란에 Jira 이슈 링크. MR Merge 시 Jira 이슈 Done 자동 전환. Sprint 번인 차트 & 벨로시티 추적 설정',
+            priority: 'medium', status: 'done', assigneeRole: 'PL', techStack: ['GitLab', 'Jira'], guideRef: '4.4절', estimatedDays: 0.5,
+          },
+        ],
+      },
+    ],
+    assignees: [기충영, 송민준, 오준열],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 2 — 서버 부팅 순서 & 공통 플랫폼 인프라
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-2', number: 2,
+    title: '공통 플랫폼 인프라 (Config·Discovery·Vault·Redis)',
+    subtitle: 'Common Platform Services',
+    description: '3.2절 서버 부팅 순서 레이어 2·3에 해당하는 Spring Cloud Config Server, Service Discovery(Consul), HashiCorp Vault, Redis·RabbitMQ를 구성합니다.',
+    status: 'todo', priority: 'high', duration: '3주', phase: 'Phase 0',
+    guideSection: '3.2절 서버 목록 및 시스템 요구사항', icon: '🔧',
+    techStack: ['Spring Cloud Config', 'Consul', 'HashiCorp Vault', 'Redis', 'RabbitMQ', 'Kubernetes'],
+    goal: {
+      summary: '애플리케이션 기동 전 설정 서버·서비스 디스커버리·시크릿 관리·캐시 브로커를 안정적으로 선행 기동한다',
+      problem: '설정값(DB URL, API 키)이 application.yml에 하드코딩되어 환경별 수동 변경 필요. 시크릿이 소스코드에 노출될 위험. 서비스 위치(IP) 하드코딩으로 스케일아웃 불가',
+      objective: 'Spring Cloud Config Server로 설정 중앙화. HashiCorp Vault로 시크릿 안전 관리. Consul로 서비스 디스커버리. Redis로 캐시/세션 공유. 부팅 순서: 인프라기초→공통플랫폼→데이터브로커→애플리케이션',
+      deliverables: ['Spring Cloud Config Server Docker 배포', 'Consul 서비스 디스커버리 설정', 'HashiCorp Vault 시크릿 주입 설정', 'Redis 캐시 공통 설정 (TTL 정책)', '부팅 순서 의존성 다이어그램'],
+      dependencies: ['Sprint 1 완료 (Docker 환경)'],
+    },
+    ossDetails: [
+      {
+        name: 'Spring Cloud Config Server',
+        version: 'Spring Cloud 2023.x',
+        role: '모든 서비스의 설정값(application.yml)을 GitLab 레포에서 중앙 관리 — 환경별(dev/staging/prod) 설정 분리',
+        why: '수동 서버 접속 후 application.yml 수정 배포 방식 탈피. 설정 변경 시 서비스 재시작 없이 /actuator/refresh로 반영 가능',
+        setupSteps: [
+          '① Spring Cloud Config Server 의존성 추가 (@EnableConfigServer)',
+          '② GitLab 레포에 fass-config-repo 생성 (application.yml, fass-biz-dev.yml 등)',
+          '③ Config Server application.yml: spring.cloud.config.server.git.uri 설정',
+          '④ 각 서비스 bootstrap.yml: spring.config.import=configserver: 설정',
+          '⑤ Docker Compose에 config-server 서비스 추가 (포트 8888)',
+          '⑥ 운영 환경: SSH 키 기반 GitLab 접근 설정',
+        ],
+        keyConfig: 'spring.cloud.config.server.git.uri=git@gitlab.jette.com:infra/fass-config-repo.git',
+        pitfalls: ['Config Server 장애 시 전체 서비스 기동 불가 → 고가용성(2대 이상) 필수', '시크릿(DB 패스워드)은 Config 레포에 저장 금지 → Vault 사용'],
+        references: ['3.2절 공통 플랫폼 서비스'],
+      },
+      {
+        name: 'HashiCorp Vault',
+        version: '1.17.x',
+        role: 'DB 비밀번호·API 키·JWT 서명 키 등 시크릿 안전 관리 및 동적 발급',
+        why: '소스코드·설정 파일에 시크릿 하드코딩 방지. 동적 DB 자격증명으로 자격증명 유출 시 즉시 무효화 가능',
+        setupSteps: [
+          '① Docker로 Vault 서버 기동 (vault:1.17)',
+          '② vault operator init + vault operator unseal (3 of 5 unseal keys)',
+          '③ KV v2 시크릿 엔진 활성화: vault secrets enable -path=fass kv-v2',
+          '④ Spring Cloud Vault 의존성 추가, bootstrap.yml Vault 주소·토큰 설정',
+          '⑤ 시크릿 경로 정의: fass/fass-biz, fass/fass-api',
+          '⑥ 운영: AppRole 인증 방식으로 서비스별 최소 권한 정책 적용',
+        ],
+        keyConfig: 'spring.cloud.vault.uri=http://vault:8200, spring.cloud.vault.authentication=APPROLE',
+        pitfalls: ['Vault 미기동 상태에서 서비스 기동 시 시작 실패 → readiness probe 필수', 'Unseal 키 분실 시 복구 불가 → 키 분산 보관 필수'],
+        references: ['3.2절 HashiCorp Vault'],
+      },
+      {
+        name: 'Redis',
+        version: '7.x',
+        role: 'Refresh Token 저장소, API 응답 캐싱, 분산 세션 공유, Rate Limit 카운터',
+        why: '메모리 기반 초고속 조회(< 1ms), TTL 기반 자동 만료, Refresh Token 블랙리스트 관리, 서버 스케일아웃 시 세션 공유',
+        setupSteps: [
+          '① docker-compose에 redis:7-alpine 추가 (포트 6379)',
+          '② Spring Data Redis 의존성 추가 (spring-boot-starter-data-redis)',
+          '③ RedisConfig: LettuceConnectionFactory, RedisTemplate<String, Object> 빈 설정',
+          '④ Refresh Token 저장: key=refresh:{userId}, TTL=7일',
+          '⑤ 캐시 설정: @EnableCaching + @Cacheable(value="users", key="#userId")',
+          '⑥ Rate Limit: Lua 스크립트로 원자적 카운터 증가',
+        ],
+        keyConfig: 'spring.data.redis.host=redis, spring.data.redis.port=6379, spring.cache.type=redis',
+        pitfalls: ['Redis 재시작 시 데이터 손실 → AOF/RDB 영속성 설정 필요', '@Cacheable 직렬화: Java 기본 직렬화 대신 Jackson2JsonRedisSerializer 사용'],
+        references: ['3.2절 데이터 및 메시지 브로커'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us2-1', asA: '인프라 담당자', iWantTo: '환경별(dev/staging/prod) 설정을 소스코드 변경 없이 Config Server에서 중앙 관리하고 싶다',
+        soThat: '환경 전환 시 application.yml 수동 수정 없이 Config Server 참조만으로 서비스 기동이 가능하다',
+        asBefore: '환경별 application-dev.yml을 서버에 직접 수정. 시크릿이 Git에 노출됨',
+        toBe: 'Config Server → GitLab config-repo 조회. 시크릿은 Vault에서 주입. /actuator/refresh로 재시작 없이 설정 갱신',
+        priority: 'high', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: ['Config Server 기동 후 GET /fass-biz/dev → 환경별 설정 반환', 'Vault KV에 저장된 DB 패스워드가 Config 레포에 미포함', '/actuator/refresh POST 시 설정 재로딩(재시작 없이)'],
+        tasks: [
+          { id: 't2-1-1', title: 'Spring Cloud Config Server 구성', description: '@EnableConfigServer, GitLab SSH 인증, 환경별 프로파일(dev/prod) 분리', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Spring Cloud Config'], guideRef: '3.2절', estimatedDays: 2 },
+          { id: 't2-1-2', title: 'HashiCorp Vault 시크릿 관리 설정', description: 'KV v2 엔진, AppRole 인증, 서비스별 시크릿 경로 정의 및 Spring Cloud Vault 연동', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['HashiCorp Vault'], guideRef: '3.2절', estimatedDays: 2 },
+          { id: 't2-1-3', title: 'Redis 공통 캐시 설정 및 Refresh Token 저장소', description: 'RedisConfig 빈, TTL 정책, Refresh Token 블랙리스트 구현', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['Redis', 'Spring Data Redis'], guideRef: '3.2절', estimatedDays: 2 },
+        ],
+      },
+    ],
+    assignees: [기충영, 송민준, 오준열],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 3 — 인증 및 보안
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-3', number: 3,
+    title: '인증 및 보안 (JWT + Spring Security 6.x)',
+    subtitle: 'Authentication & Security',
+    description: 'Stateless JWT 인증 아키텍처, Access/Refresh Token 이중 전략, Spring Security 6.x, Silent Refresh, 로그인 UI를 구현합니다.',
+    status: 'in-progress', priority: 'high', duration: '3주', phase: 'Phase 1',
+    guideSection: '5.3절', icon: '🔐',
+    techStack: ['JWT', 'Spring Security 6.x', 'HttpOnly Cookie', 'Axios Interceptor', 'Zustand', 'Next.js App Router'],
+    goal: {
+      summary: '기존 Tray 프로그램 의존성을 완전 제거하고 브라우저-서버 표준 JWT Stateless 인증으로 전환한다',
+      problem: '기존 시스템은 Windows Tray 에이전트 없으면 로그인 불가. 모바일·외부망 접속 불가. 세션 서버 의존으로 수평 확장 어려움',
+      objective: 'Access Token(30분, 메모리)/Refresh Token(7일, HttpOnly Cookie). 401 발생 시 Silent Refresh로 끊김 없는 UX. Spring Security 6.x Stateless 설정',
+      deliverables: ['JwtTokenProvider (발급·검증·갱신)', 'SecurityFilterChain (Stateless, CORS, CSRF)', 'Axios 인스턴스 + Interceptor', 'Zustand authStore', '로그인 페이지 UI'],
+      dependencies: ['Sprint 1 (Docker)', 'Sprint 2 (Redis — Refresh Token 저장)'],
+    },
+    ossDetails: [
+      {
+        name: 'Spring Security 6.x',
+        version: 'Spring Boot 3.x 내장',
+        role: 'HTTP 요청 보안 필터 체인 — 인증(Authentication)·인가(Authorization) 중앙 처리',
+        why: '기존 세션 기반 보안 설정(WebSecurityConfigurerAdapter) 방식이 Spring Boot 3에서 제거됨. SecurityFilterChain 빈 방식으로 전환 필수',
+        setupSteps: [
+          '① SecurityFilterChain @Bean 선언 — WebSecurityConfigurerAdapter 완전 제거',
+          '② SessionCreationPolicy.STATELESS 설정 — 세션 생성 금지',
+          '③ CorsConfigurationSource 빈 설정 — Next.js 도메인 화이트리스트',
+          '④ csrf.disable() — Stateless JWT에서 CSRF 위험 낮음',
+          '⑤ JwtAuthenticationFilter (OncePerRequestFilter) — Authorization 헤더 검증',
+          '⑥ AuthenticationEntryPoint — 401 JSON 응답, AccessDeniedHandler — 403 JSON 응답',
+        ],
+        keyConfig: 'http.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))',
+        pitfalls: ['@EnableWebSecurity + @EnableMethodSecurity 둘 다 필요 (@PreAuthorize 사용 시)', 'CORS 설정을 Security 레벨에서 처리해야 함 (Spring MVC @CrossOrigin 무시됨)'],
+        references: ['5.3절 주요 보안 설정', '14.2절 AOP 권한 제어'],
+      },
+      {
+        name: 'JWT (jjwt 라이브러리)',
+        version: '0.12.x',
+        role: 'Access Token / Refresh Token 생성·서명·검증',
+        why: 'Stateless 인증으로 서버 세션 불필요. Payload에 userId·roles·company_cd 포함 가능. HMAC-SHA256 서명으로 위조 방지',
+        setupSteps: [
+          '① io.jsonwebtoken:jjwt-api:0.12.x 의존성 추가 (api + impl + jackson)',
+          '② 서명 키: HS256 알고리즘, 256bit 이상 Base64 인코딩 키 생성',
+          '③ JwtTokenProvider.generateAccessToken(): claims(userId, roles, company_cd), expiry(30분)',
+          '④ JwtTokenProvider.generateRefreshToken(): userId만 포함, expiry(7일), Redis 저장',
+          '⑤ JwtTokenProvider.validateToken(): parseSignedClaims() — 만료·서명 검증',
+          '⑥ JwtAuthenticationFilter: Bearer 추출 → 검증 → SecurityContext 설정',
+        ],
+        keyConfig: 'Jwts.builder().subject(userId).claim("roles", roles).expiration(date).signWith(key).compact()',
+        pitfalls: ['서명 키를 application.yml에 하드코딩 금지 → Vault에서 주입', 'Access Token은 localStorage 저장 금지 (XSS 취약) → 메모리(변수)에만 보관'],
+        references: ['5.3절 JWT 운영 전략'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us3-1', asA: '사용자', iWantTo: 'ID/PW 로그인 후 모든 API 요청에서 자동으로 인증이 처리되길 바란다',
+        soThat: '매 요청마다 수동으로 인증 정보를 첨부할 필요 없이 정상 업무를 진행할 수 있다',
+        asBefore: 'Tray 프로그램 설치·실행 필수. 모바일 접속 불가',
+        toBe: 'Axios Interceptor가 Bearer Token 자동 주입. 401 시 Silent Refresh 후 재요청',
+        priority: 'high', status: 'in-progress', storyPoints: 13,
+        acceptanceCriteria: ['POST /api/v1/auth/login → accessToken(Body) + refreshToken(HttpOnly Cookie)', 'JwtAuthenticationFilter: 모든 요청 헤더 JWT 검증', '401 시 Silent Refresh 흐름 정상 동작 (프론트 구현은 Sprint 6)', 'Refresh Token 만료 시 /login 리다이렉트'],
+        tasks: [
+          { id: 't3-1-1', title: 'JwtTokenProvider 구현 (발급·검증·갱신)', description: 'Access Token(30분)/Refresh Token(7일) 생성, HMAC-SHA256, Payload: userId·roles·company_cd', priority: 'high', status: 'in-progress', assigneeRole: '백엔드', techStack: ['JWT', 'Java 21'], guideRef: '5.3절', estimatedDays: 2, subTasks: [{ id: 'st3-1-1-1', title: 'AccessToken 생성', status: 'done' }, { id: 'st3-1-1-2', title: 'RefreshToken 생성 + Redis 저장', status: 'in-progress' }, { id: 'st3-1-1-3', title: '토큰 검증·파싱', status: 'todo' }] },
+          { id: 't3-1-2', title: 'SecurityFilterChain 설정', description: 'Stateless·CORS·CSRF·JwtAuthenticationFilter·401/403 핸들러', priority: 'high', status: 'in-progress', assigneeRole: '백엔드', techStack: ['Spring Security 6.x'], guideRef: '5.3절', estimatedDays: 2 },
+          { id: 't3-1-3', title: '[→Sprint 6] Axios + Zustand 인증 연동', description: '프론트엔드 Axios Silent Refresh Interceptor 및 authStore는 Sprint 6(상태관리·API통신)에서 일괄 구현 — t6-1-1, t6-1-4 참조', priority: 'medium', status: 'todo', assigneeRole: '프론트', techStack: ['Axios', 'Zustand'], guideRef: 'Sprint 6', estimatedDays: 0 },
+        ],
+      },
+    ],
+    assignees: [기충영, 송민준, 오준열],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 3-B — SSO 연동 + 사용자 프로파일 관리
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-3b', number: 4,
+    title: 'SSO 연동 + AI Agent 역할·프로파일 관리',
+    subtitle: 'SSO Integration & User Profile Management',
+    description: 'Keycloak 기반 SSO(SAML 2.0/OIDC) 연동, AI Agent 전용 서비스 계정 RBAC 역할 부여, 사용자 프로파일(부서·직책·권한 그룹) 관리 화면을 구현합니다.',
+    status: 'todo', priority: 'high', duration: '3주', phase: 'Phase 1',
+    guideSection: '5.3절·14장', icon: '🔑',
+    techStack: ['Keycloak 24', 'OIDC/OAuth2', 'SAML 2.0', 'Spring Security OAuth2 Client', 'JWT Claims Mapping', 'AI Agent Service Account'],
+    goal: {
+      summary: '기존 사내 LDAP/AD 계정을 Keycloak SSO로 통합하고, AI Agent에 서비스 계정 RBAC 역할을 부여하여 단일 인증 체계를 완성한다',
+      problem: '사용자가 시스템마다 별도 ID/PW 관리. AI Agent가 API 호출 시 인증 방법 표준 없음. 퇴사자 계정 즉시 회수 불가(시스템별 수동 삭제). 프로파일(부서·직책·권한) 변경이 여러 시스템에 별도 반영 필요',
+      objective: 'Keycloak이 모든 인증 중앙 처리(LDAP 연동). SSO로 한 번 로그인 시 전체 서비스 이용. AI Agent는 Client Credentials Grant로 서비스 계정 토큰 발급 → RBAC 역할 부여. 사용자 프로파일을 Keycloak User Attribute + DB로 이중 관리',
+      deliverables: [
+        'Keycloak 서버 설치 및 Realm/Client 설정',
+        'Spring Security OAuth2 Resource Server 설정',
+        'LDAP/AD 사용자 연동 (Federation Provider)',
+        'AI Agent 서비스 계정 + Client Credentials Grant',
+        'Keycloak → JWT Claims 매핑 (roles, company_cd, dept_cd)',
+        '사용자 프로파일 관리 화면 (React — 부서·직책·권한그룹)',
+        'Role 동기화 배치 (Keycloak Roles ↔ FaSS DB RBAC)',
+      ],
+      dependencies: ['Sprint 1 완료 (Docker)', 'Sprint 3 완료 (JWT/Spring Security 기반)'],
+    },
+    ossDetails: [
+      {
+        name: 'Keycloak 24 (OIDC/SAML SSO)',
+        version: '24.x',
+        role: 'IAM(Identity and Access Management) 중앙 서버 — SSO, LDAP 연동, OAuth2/OIDC 인증, 사용자·역할 관리',
+        why: '시스템마다 별도 인증 제거. LDAP/AD 기존 계정 재사용. 퇴사자 Keycloak 계정 비활성화 한 번으로 전체 시스템 접근 차단. 오픈소스 + 엔터프라이즈 지원',
+        setupSteps: [
+          '① Docker Compose: quay.io/keycloak/keycloak:24.0 (포트 8080)',
+          '② Realm 생성: jette-realm (FaSS Platform 전용)',
+          '③ Client 등록: fass-frontend(공개 PKCE), fass-backend(기밀), fass-ai-agent(서비스 계정)',
+          '④ LDAP/AD User Federation: ldap.jette.com 연동, 사용자 동기화 스케줄 설정',
+          '⑤ Protocol Mapper: company_cd, dept_cd, employee_no → JWT Claims 자동 추가',
+          '⑥ Role 설계: Realm Role(ADMIN, MANAGER, USER) + Client Role(ORDER_MANAGE, STOCK_VIEW)',
+          '⑦ Group 설정: 부서 그룹 생성 → 그룹에 Role 할당 → 사용자 그룹 추가 시 Role 자동 상속',
+        ],
+        keyConfig: 'KEYCLOAK_ADMIN=admin KEYCLOAK_ADMIN_PASSWORD=secret KC_DB=postgres KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak',
+        pitfalls: [
+          'Keycloak DB는 반드시 PostgreSQL 사용 (H2는 개발 전용, 운영 사용 금지)',
+          'Token Lifespan 설정: Access Token 5분, Refresh Token 30분 (FaSS JWT와 별도)',
+          'PKCE(Proof Key for Code Exchange): 프론트엔드 공개 클라이언트에 필수 적용',
+          '세션 클러스터링: 운영 환경 Infinispan 분산 캐시 설정 필요 (단일 노드 세션 손실 방지)',
+        ],
+        references: ['5.3절 인증 및 보안 — Keycloak 연동', '14장 권한 관리 — RBAC + SSO'],
+      },
+      {
+        name: 'Spring Security OAuth2 Resource Server',
+        version: 'Spring Boot 3.x 내장',
+        role: 'Keycloak이 발급한 JWT Access Token 검증 — JWK Set URI로 공개키 자동 조회',
+        why: '직접 JWT 서명 키 관리 불필요. Keycloak JWK Set URI에서 공개키 자동 조회·갱신. Keycloak 역할(realm_access.roles)을 Spring Security GrantedAuthority로 자동 변환',
+        setupSteps: [
+          '① spring-boot-starter-oauth2-resource-server 의존성 추가',
+          '② application.yml: spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://keycloak:8080/realms/jette-realm/protocol/openid-connect/certs',
+          '③ SecurityFilterChain: .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))',
+          '④ JwtAuthenticationConverter: realm_access.roles → ROLE_ prefix GrantedAuthority 변환',
+          '⑤ Custom Claims 추출: JwtClaimsConverter로 company_cd, dept_cd, employee_no 파싱',
+          '⑥ @PreAuthorize("hasRole(\'ADMIN\')") 그대로 사용 가능 (역할 자동 매핑)',
+        ],
+        keyConfig: 'spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://keycloak:8080/realms/jette-realm/protocol/openid-connect/certs',
+        pitfalls: [
+          'Keycloak realm_access.roles 구조가 Spring Security 기본 변환과 달라 JwtAuthenticationConverter 커스텀 필수',
+          '개발 환경 Keycloak HTTP 접근 시 insecure-requests: permit 설정 필요',
+        ],
+        references: ['5.3절 JWT 운영 전략 — Resource Server 전환'],
+      },
+      {
+        name: 'AI Agent Service Account (Client Credentials Grant)',
+        version: 'OAuth2 RFC 6749',
+        role: 'AI Agent(LLM 에이전트·배치·자동화 스크립트)가 사용자 없이 API 호출 시 서비스 계정 토큰으로 인증',
+        why: '사람 사용자 계정을 AI Agent가 공유 사용 금지(보안 위험). 서비스 계정은 최소 권한 원칙 적용, 감사 로그에서 AI Agent 호출 명확히 구분',
+        setupSteps: [
+          '① Keycloak: fass-ai-agent Client 생성, Service Account Enabled=true, Client Authentication=ON',
+          '② Role 할당: AI_AGENT_READ, AI_AGENT_WRITE 전용 역할 생성 → 서비스 계정에 할당',
+          '③ Client Credentials 토큰 발급: POST /realms/jette-realm/protocol/openid-connect/token (grant_type=client_credentials)',
+          '④ AI Agent 코드: client_id + client_secret으로 Access Token 발급 → Bearer 헤더 사용',
+          '⑤ Token 만료 전 자동 갱신: 만료 30초 전 재발급 스케줄러',
+          '⑥ Spring Security: @PreAuthorize("hasRole(\'AI_AGENT_READ\')") — 사람 계정과 역할 분리',
+        ],
+        keyConfig: 'grant_type=client_credentials&client_id=fass-ai-agent&client_secret={secret}&scope=api.read',
+        pitfalls: [
+          'client_secret은 환경변수·Vault에서 주입 (소스코드·설정파일에 하드코딩 절대 금지)',
+          'AI Agent 서비스 계정에 ADMIN 역할 부여 금지 — 최소 권한(read-only 또는 특정 API만) 원칙',
+          'Access Token 만료 시간을 짧게(15분) 설정하고 자동 갱신 로직 필수',
+        ],
+        references: ['14.1절 RBAC 권한 모델 — 서비스 계정', 'AI Agent 역할 설계 가이드'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us3b-1',
+        asA: '임직원',
+        iWantTo: '사내 LDAP 계정(사원번호/비밀번호) 하나로 FaSS 시스템 전체에 SSO 로그인하고 싶다',
+        soThat: '시스템마다 별도 ID/PW를 기억하지 않아도 되고, 퇴사 시 계정이 일괄 비활성화된다',
+        asBefore: '시스템마다 별도 계정 가입·관리. 퇴사자 계정 수동 삭제 누락으로 보안 사고 위험. 비밀번호 정책이 시스템마다 달라 복잡성 관리 어려움',
+        toBe: 'Keycloak LDAP 연동 → 사원번호+비밀번호 한 번 입력 → jette-realm 토큰 발급 → 모든 FaSS 서비스 이용. 퇴사 시 LDAP 계정 비활성화 → 전 시스템 즉시 차단',
+        priority: 'high',
+        status: 'todo',
+        storyPoints: 13,
+        acceptanceCriteria: [
+          'LDAP 계정으로 Keycloak 로그인 → FaSS Access Token 발급',
+          'SSO: /login 리다이렉트 → Keycloak 인증 → 콜백 → 자동 로그인',
+          'LDAP 계정 비활성화 시 FaSS 로그인 즉시 차단 (5분 이내)',
+          'JWT Payload에 employee_no, dept_cd, company_cd 자동 포함',
+          'Keycloak Admin Console에서 역할 변경 → 다음 로그인 시 즉시 반영',
+        ],
+        tasks: [
+          {
+            id: 't3b-1-1',
+            title: 'Keycloak 서버 Docker 배포 + Realm/Client 초기 설정',
+            description: 'quay.io/keycloak/keycloak:24.0 Docker Compose, jette-realm 생성, fass-frontend/backend/ai-agent 클라이언트 등록, PostgreSQL DB 연결',
+            priority: 'high', status: 'todo', assigneeRole: '인프라',
+            techStack: ['Keycloak', 'Docker', 'PostgreSQL'],
+            guideRef: 'SSO 설계 — Keycloak 초기 구성',
+            estimatedDays: 2,
+            subTasks: [
+              { id: 'st3b-1-1-1', title: 'Docker Compose keycloak 서비스 추가', status: 'todo' },
+              { id: 'st3b-1-1-2', title: 'jette-realm 생성 및 기본 설정', status: 'todo' },
+              { id: 'st3b-1-1-3', title: 'Client 3종 등록 (frontend/backend/ai-agent)', status: 'todo' },
+              { id: 'st3b-1-1-4', title: 'PostgreSQL keycloak DB 스키마 초기화', status: 'todo' },
+            ],
+          },
+          {
+            id: 't3b-1-2',
+            title: 'LDAP/AD User Federation 연동',
+            description: 'Keycloak LDAP Provider: ldap.jette.com 연동, 사용자 속성(employee_no, dept_cd) 매핑, 동기화 주기(5분) 설정, 비밀번호 정책 LDAP 위임',
+            priority: 'high', status: 'todo', assigneeRole: '인프라+보안',
+            techStack: ['Keycloak', 'LDAP'],
+            guideRef: 'SSO — LDAP Federation',
+            estimatedDays: 2,
+          },
+          {
+            id: 't3b-1-3',
+            title: 'Protocol Mapper — JWT Claims 커스텀 매핑',
+            description: 'company_cd, dept_cd, employee_no, job_title → JWT Payload 자동 삽입. Mapper 타입: User Attribute, Group Membership',
+            priority: 'high', status: 'todo', assigneeRole: '백엔드',
+            techStack: ['Keycloak', 'JWT'],
+            guideRef: '5.3절 JWT Claims',
+            estimatedDays: 1,
+          },
+          {
+            id: 't3b-1-4',
+            title: 'Spring Security OAuth2 Resource Server 전환',
+            description: 'JWK Set URI 설정, JwtAuthenticationConverter(realm_access.roles → GrantedAuthority), Custom Claims 추출 컨버터',
+            priority: 'high', status: 'todo', assigneeRole: '백엔드',
+            techStack: ['Spring Security', 'OAuth2'],
+            guideRef: '5.3절 Spring Security',
+            estimatedDays: 2,
+            subTasks: [
+              { id: 'st3b-1-4-1', title: 'OAuth2 Resource Server 의존성 + 설정', status: 'todo' },
+              { id: 'st3b-1-4-2', title: 'JwtAuthenticationConverter 커스텀 구현', status: 'todo' },
+              { id: 'st3b-1-4-3', title: '@PreAuthorize 기존 로직과 통합 테스트', status: 'todo' },
+            ],
+          },
+          {
+            id: 't3b-1-5',
+            title: 'Next.js SSO 로그인 플로우 (PKCE)',
+            description: '/login → Keycloak Authorization Endpoint → 콜백(/callback) → Access Token 저장(메모리) + Refresh Token(HttpOnly Cookie). next-auth 또는 커스텀 구현',
+            priority: 'high', status: 'todo', assigneeRole: '프론트',
+            techStack: ['Next.js', 'PKCE', 'OAuth2'],
+            guideRef: '5.3절 인증 흐름',
+            estimatedDays: 2,
+          },
+        ],
+      },
+      {
+        id: 'us3b-2',
+        asA: 'AI Agent (LLM 에이전트)',
+        iWantTo: '사람 계정 없이 서비스 계정(Client Credentials)으로 FaSS API를 안전하게 호출하고 싶다',
+        soThat: '사람 계정 공유 없이 최소 권한 원칙으로 API를 호출하고, 감사 로그에서 AI Agent 호출임을 식별할 수 있다',
+        asBefore: 'AI Agent가 개발자 계정을 공유하여 API 호출. 감사 로그에서 AI 호출과 사람 호출 구분 불가. 계정 패스워드 만료 시 AI Agent 중단',
+        toBe: 'fass-ai-agent 서비스 계정 → Client Credentials Grant → Access Token(15분) 자동 갱신 → AI_AGENT_READ/WRITE 최소 권한만 보유. 감사 로그에 client_id=fass-ai-agent 명시',
+        priority: 'high',
+        status: 'todo',
+        storyPoints: 8,
+        acceptanceCriteria: [
+          'client_credentials 방식으로 Access Token 발급 성공',
+          'AI_AGENT_READ 역할로 조회 API만 호출 가능, ORDER_MANAGE API 호출 시 403',
+          '토큰 만료 15분 전 자동 갱신 동작',
+          '감사 로그에 호출 주체 client_id=fass-ai-agent 기록',
+          'client_secret Vault에서 주입 (환경변수 노출 없음)',
+        ],
+        tasks: [
+          {
+            id: 't3b-2-1',
+            title: 'AI Agent 서비스 계정 + 전용 역할 생성',
+            description: 'Keycloak: fass-ai-agent Client 생성, Service Account Enabled, AI_AGENT_READ + AI_AGENT_WRITE Realm Role 생성 및 할당',
+            priority: 'high', status: 'todo', assigneeRole: '인프라+보안',
+            techStack: ['Keycloak'],
+            guideRef: 'AI Agent RBAC 설계',
+            estimatedDays: 1,
+          },
+          {
+            id: 't3b-2-2',
+            title: 'AI Agent Client Credentials 토큰 발급 모듈',
+            description: 'Python/Java: POST /token (grant_type=client_credentials), 만료 전 자동 갱신 스케줄러, Vault에서 client_secret 주입',
+            priority: 'high', status: 'todo', assigneeRole: 'AI Agent 개발자',
+            techStack: ['Python', 'OAuth2', 'Vault'],
+            guideRef: 'AI Agent 인증 모듈',
+            estimatedDays: 2,
+          },
+          {
+            id: 't3b-2-3',
+            title: 'Spring Security AI Agent 역할 제어 (@PreAuthorize)',
+            description: 'AI_AGENT_READ 역할 전용 API 엔드포인트 @PreAuthorize 설정. 감사 로그: 요청 client_id, 호출 API, 타임스탬프 기록',
+            priority: 'medium', status: 'todo', assigneeRole: '백엔드',
+            techStack: ['Spring Security', 'AOP'],
+            guideRef: '14.2절 AOP 권한 제어',
+            estimatedDays: 1,
+          },
+        ],
+      },
+      {
+        id: 'us3b-3',
+        asA: '시스템 관리자',
+        iWantTo: '사용자의 부서·직책·권한 그룹을 한 화면에서 관리하고, 변경 즉시 Keycloak과 FaSS DB에 동기화하고 싶다',
+        soThat: '조직 변경(부서 이동·직급 변경) 시 시스템 접근 권한이 자동으로 업데이트된다',
+        asBefore: '사용자 프로파일 변경 시 LDAP·사내 시스템·FaSS DB 각각 수동 업데이트. 동기화 오류로 권한 불일치 발생',
+        toBe: '프로파일 관리 화면에서 변경 → Keycloak Admin REST API 호출 + FaSS DB 동시 업데이트. Keycloak Event Listener로 변경 이벤트 감지 → 캐시 무효화',
+        priority: 'medium',
+        status: 'todo',
+        storyPoints: 8,
+        acceptanceCriteria: [
+          '사용자 부서 변경 → Keycloak 그룹 변경 + FaSS DB 동시 반영 (트랜잭션)',
+          'Keycloak Admin REST API로 사용자 조회/수정 가능',
+          'Role 변경 후 다음 토큰 갱신 시 새 역할 반영 (최대 5분 이내)',
+          '사용자 프로파일 화면: 이름·부서·직책·권한그룹·계정상태 표시 및 편집',
+          'Keycloak Role ↔ FaSS DB RBAC 동기화 배치 (일일 1회 정합성 검증)',
+        ],
+        tasks: [
+          {
+            id: 't3b-3-1',
+            title: '사용자 프로파일 관리 API (Keycloak Admin + FaSS DB)',
+            description: 'Keycloak Admin REST API 래퍼: 사용자 조회·수정·역할 변경. FaSS DB TB_USER 동시 업데이트. 분산 트랜잭션 고려 (Keycloak 선행 후 DB)',
+            priority: 'medium', status: 'todo', assigneeRole: '백엔드',
+            techStack: ['Spring Boot', 'Keycloak Admin API'],
+            guideRef: '13.4절 마스터 데이터 관리',
+            estimatedDays: 3,
+          },
+          {
+            id: 't3b-3-2',
+            title: '사용자 프로파일 관리 화면 (React)',
+            description: '사용자 목록 조회(페이지네이션), 상세 프로파일 편집(부서·직책·권한그룹·계정활성화), 역할 할당 다중 선택 UI',
+            priority: 'medium', status: 'todo', assigneeRole: '프론트',
+            techStack: ['React', 'TanStack Query'],
+            guideRef: '14.1절 RBAC + 9.1절 페이지 컴포넌트',
+            estimatedDays: 3,
+          },
+          {
+            id: 't3b-3-3',
+            title: 'Keycloak ↔ FaSS DB Role 동기화 배치 (fass-batch)',
+            description: 'Spring Batch Job: Keycloak Realm Roles 조회 → FaSS DB TB_ROLE 정합성 검증·동기화. 불일치 항목 알림(Mattermost)',
+            priority: 'low', status: 'todo', assigneeRole: '백엔드',
+            techStack: ['Spring Batch', 'Keycloak'],
+            guideRef: '6.2절 fass-batch',
+            estimatedDays: 2,
+          },
+        ],
+      },
+    ],
+    assignees: [기충영],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 4 — 권한 관리
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-4', number: 5,
+    title: '권한 관리 (RBAC + ABAC + AOP)',
+    subtitle: 'Authorization Management',
+    description: 'RBAC·ABAC 하이브리드, @PreAuthorize AOP 선언적 권한 제어, OrgSelector 조직도 컴포넌트(Lazy Loading)를 구현합니다.',
+    status: 'in-progress', priority: 'high', duration: '3주', phase: 'Phase 1',
+    guideSection: '14장·15.1절', icon: '🛡️',
+    techStack: ['Spring AOP', '@PreAuthorize', 'RBAC', 'ABAC', 'OrgSelector', 'TanStack Query'],
+    goal: {
+      summary: '화면 단위 권한에서 API 메서드 단위 선언적 권한 제어로 진화하고, 조직도 기반 데이터 접근 범위를 동적으로 제어한다',
+      problem: '기존: 화면 메뉴 숨기기로만 권한 제어 → Postman으로 API 직접 호출 시 권한 우회 가능. 조직도 컨트롤 4개 버전 파편화',
+      objective: '@PreAuthorize로 메서드 단위 권한 제어. RBAC+ABAC 하이브리드(역할 + 본인 데이터 속성). OrgSelector 단일 컴포넌트로 통합',
+      deliverables: ['RBAC DB 스키마 (User/Role/Permission/Screen)', '@PreAuthorize AOP 설정', 'OrgSelector React 컴포넌트 (Lazy Loading)', '화면 ID 생성 유틸리티'],
+      dependencies: ['Sprint 3 완료 (JWT — roles 클레임)'],
+    },
+    ossDetails: [
+      {
+        name: 'Spring AOP (@PreAuthorize)',
+        version: 'Spring Security 6.x 내장',
+        role: '비즈니스 로직과 보안 로직 분리 — 메서드 실행 전 선언적 권한 검사',
+        why: '비즈니스 코드에 if(hasPermission()) 분기 없이 어노테이션 한 줄로 권한 제어. ABAC 조건 표현식(SpEL)으로 세밀한 제어',
+        setupSteps: [
+          '① @EnableWebSecurity + @EnableMethodSecurity(prePostEnabled=true) 설정',
+          '② JWT Claims → GrantedAuthority 변환: SimpleGrantedAuthority("ROLE_ADMIN") 형식',
+          '③ @PreAuthorize("hasAuthority(\'ORDER_MANAGE\')") — Permission 기반 제어',
+          '④ @PreAuthorize("hasRole(\'ADMIN\') or #userId == authentication.name") — ABAC 제어',
+          '⑤ CustomPermissionEvaluator 구현 시 hasPermission() SpEL 지원',
+          '⑥ @PostAuthorize로 반환값 기반 후처리 권한 검사 (본인 데이터 검증)',
+        ],
+        keyConfig: '@PreAuthorize("hasAuthority(\'ORDER_MANAGE\') and #request.companyCd == authentication.details.companyCd")',
+        pitfalls: ['@PreAuthorize는 public 메서드에만 동작 (Spring AOP 프록시 한계)', '@Transactional과 함께 사용 시 self-invocation 문제 주의'],
+        references: ['14.2절 AOP 기반 선언적 권한 제어'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us4-1', asA: '관리자', iWantTo: '역할 부여만으로 API 접근이 자동으로 제한되길 원한다',
+        soThat: 'API URL 직접 호출로 권한을 우회하는 보안 취약점을 차단할 수 있다',
+        asBefore: '화면 메뉴 숨기기로만 권한 제어. API 직접 호출 시 데이터 조작 가능',
+        toBe: '@PreAuthorize로 메서드 단위 제어. 권한 없는 호출 시 403 반환',
+        priority: 'high', status: 'in-progress', storyPoints: 13,
+        acceptanceCriteria: ['ORDER_MANAGE 권한 없는 사용자 createOrder() 호출 → 403', 'Role-Permission 매핑 CRUD API', 'JWT roles → GrantedAuthority 변환'],
+        tasks: [
+          { id: 't4-1-1', title: 'RBAC DB 스키마 설계', description: 'TB_USER·TB_ROLE·TB_PERMISSION·TB_USER_ROLE·TB_ROLE_PERMISSION + COMPANY_CD 복합PK', priority: 'high', status: 'in-progress', assigneeRole: '백엔드', techStack: ['PostgreSQL'], guideRef: '14.1절', estimatedDays: 2, subTasks: [{ id: 'st4-1-1-1', title: 'ERD 설계', status: 'done' }, { id: 'st4-1-1-2', title: 'DDL 스크립트', status: 'in-progress' }, { id: 'st4-1-1-3', title: 'Seed 데이터', status: 'todo' }] },
+          { id: 't4-1-2', title: '@PreAuthorize AOP 설정 + ABAC 표현식', description: '@EnableMethodSecurity, JWT→GrantedAuthority, ABAC 조건 SpEL 구현', priority: 'high', status: 'in-progress', assigneeRole: '백엔드', techStack: ['Spring AOP', 'Spring Security'], guideRef: '14.2절', estimatedDays: 3 },
+          { id: 't4-1-3', title: 'OrgSelector React 컴포넌트 (Lazy Loading)', description: 'Tree UI, 부서 확장 시 API 호출, TanStack Query 캐싱, 단일/다중 선택', priority: 'medium', status: 'todo', assigneeRole: '프론트', techStack: ['React', 'TanStack Query'], guideRef: '14.3절', estimatedDays: 3 },
+        ],
+      },
+    ],
+    assignees: [기충영, 심지훈, 이지상],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 5 — 공통 프레임워크 아키텍처
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-5', number: 6,
+    title: '공통 프레임워크 아키텍처 (SiteFramework)',
+    subtitle: 'Core Framework Architecture',
+    description: 'Spring Boot 멀티모듈(fass-core/biz/api/batch), Next.js App Router 표준 디렉토리, Atomic Design 컴포넌트 계층, Java 21 가상 스레드를 정립합니다.',
+    status: 'todo', priority: 'high', duration: '3주', phase: 'Phase 2',
+    guideSection: '6장·7장·3.3절', icon: '🏛️',
+    techStack: ['Spring Boot 3.x', 'Java 21 Virtual Threads', 'Gradle Multi-module', 'Next.js App Router', 'Atomic Design', 'Figma Dev Mode'],
+    goal: {
+      summary: '모놀리식 .NET에서 탈피해 멀티모듈 + Atomic Design으로 독립성과 재사용성을 확보한다',
+      problem: '기존 fx.Platform v2(WCF/IIS) 종속으로 기능 변경 시 전체 재빌드. 프론트 컴포넌트 재사용성 없음. Java 11의 스레드 풀 한계',
+      objective: 'fass-core/biz/api/batch 모듈로 책임 분리. Java 21 가상 스레드로 I/O 블로킹 처리 효율화. Atomic Design으로 재사용 컴포넌트 체계',
+      deliverables: ['Gradle 멀티모듈 settings.gradle.kts', 'Java 21 가상 스레드 설정', 'Next.js src/app 표준 디렉토리', 'Atoms/Molecules/Organisms 샘플 세트'],
+      dependencies: ['Sprint 1 완료'],
+    },
+    ossDetails: [
+      {
+        name: 'Java 21 (OpenJDK LTS)',
+        version: '21.0.x LTS',
+        role: '가상 스레드(Virtual Threads)로 고동시성 I/O 처리 효율화, 레코드 패턴·패턴 매칭으로 코드 간결화',
+        why: 'Spring MVC의 thread-per-request 모델에서 가상 스레드 적용 시 수만 개 동시 요청 처리 가능. 플랫폼 스레드(200개 제한) 대비 메모리 효율 극대화',
+        setupSteps: [
+          '① Gradle: java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }',
+          '② Spring Boot 3.2+: spring.threads.virtual.enabled=true (Tomcat 가상 스레드 적용)',
+          '③ @Bean TomcatProtocolHandlerCustomizer: executor → Executors.newVirtualThreadPerTaskExecutor()',
+          '④ 레코드 타입: public record UserDto(String id, String name) {} — Lombok @Data 대체',
+          '⑤ 패턴 매칭: switch(obj) { case UserDto u -> ...; case OrderDto o -> ...; }',
+          '⑥ Sequenced Collections(JDK 21) 활용: List.getFirst(), List.getLast()',
+        ],
+        keyConfig: 'spring.threads.virtual.enabled=true (Spring Boot 3.2+)',
+        pitfalls: ['ThreadLocal 사용 코드에서 가상 스레드 pinning 발생 가능 → ScopedValue 마이그레이션 고려', 'synchronized 블록은 가상 스레드 블로킹 → ReentrantLock으로 전환'],
+        references: ['3.3절 백엔드 개발 환경 (Java 21)'],
+      },
+      {
+        name: 'Gradle (Kotlin DSL)',
+        version: '8.5+',
+        role: '멀티모듈 빌드 자동화 — fass-parent/core/biz/api/batch 의존성 BOM 관리',
+        why: 'Maven보다 빠른 증분 빌드. 타입 안전한 Kotlin DSL. 멀티모듈에서 공통 의존성 BOM 일원 관리',
+        setupSteps: [
+          '① settings.gradle.kts: rootProject.name = "fass-project", include("fass-core", "fass-biz", "fass-api", "fass-batch")',
+          '② fass-parent/build.gradle.kts: 공통 dependencies BOM (Spring Boot, Lombok, MapStruct 버전)',
+          '③ subprojects { apply plugin: "java" } — 공통 플러그인 적용',
+          '④ fass-biz/build.gradle.kts: implementation(project(":fass-core"))만 의존',
+          '⑤ fass-api/build.gradle.kts: implementation(project(":fass-biz"))만 의존 (fass-core 직접 참조 금지)',
+          '⑥ ./gradlew :fass-api:bootJar — 모듈별 독립 빌드',
+        ],
+        keyConfig: 'include("fass-core", "fass-biz", "fass-api", "fass-batch")',
+        pitfalls: ['fass-api가 fass-core를 직접 의존 시 레이어 위반 → fass-biz 경유만 허용', 'Gradle 캐시 디렉토리(.gradle) Git 커밋 금지'],
+        references: ['6.2절 백엔드 디렉토리 구조'],
+      },
+      {
+        name: 'Next.js 14 (App Router)',
+        version: '14.x',
+        role: 'SSR/SSG/RSC 지원 React 프레임워크 — SEO·초기 로딩 최적화, 파일 시스템 기반 라우팅',
+        why: 'Pages Router 대비 App Router: 서버 컴포넌트(RSC)로 초기 JS 번들 감소. Streaming으로 부분 렌더링. 레이아웃 중첩 지원',
+        setupSteps: [
+          '① src/app/layout.tsx: 루트 레이아웃 (GlobalHeader, AuthProvider)',
+          '② 서버 컴포넌트(RSC 기본): 데이터 fetch는 서버에서, DB 접근 시 직접 백엔드 호출',
+          '③ 클라이언트 컴포넌트: "use client" 지시어 — useState·useEffect·Zustand 사용',
+          '④ src/app/[feature]/page.tsx: 페이지 컴포넌트 (기본 export default)',
+          '⑤ src/app/[feature]/loading.tsx: Suspense fallback 자동 적용',
+          '⑥ next.config.ts: rewrites()로 /api/* → 백엔드 프록시 설정',
+        ],
+        keyConfig: '"use client"; // 클라이언트 컴포넌트 선언 — 없으면 기본 서버 컴포넌트',
+        pitfalls: ['RSC에서 useState/useEffect 사용 불가 → "use client" 추가', 'Zustand 스토어는 클라이언트 컴포넌트 트리에서만 사용 가능'],
+        references: ['3.4절 프론트엔드 개발 환경', '10.1절 Next.js 라우팅'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us5-1', asA: '백엔드 개발자', iWantTo: 'fass-biz 모듈만 수정 시 fass-api에 영향 없이 독립 빌드·배포하고 싶다',
+        soThat: '소규모 기능 변경에도 전체 서비스 재배포 위험을 줄일 수 있다',
+        asBefore: '단일 WAR 파일. 결재 로직 1줄 수정에 전체 10분 빌드 후 재배포',
+        toBe: 'fass-biz 변경 → 해당 모듈 JAR만 교체. 독립 빌드(./gradlew :fass-biz:bootJar) 성공',
+        priority: 'high', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: ['fass-biz는 fass-core만 의존, fass-api 의존 없음', 'fass-api는 fass-biz만 의존 (직접 DB 접근 없음)', '각 모듈 독립 JAR 빌드 성공'],
+        tasks: [
+          { id: 't5-1-1', title: 'Gradle 멀티모듈 settings.gradle.kts 설정', description: 'rootProject, include 4개 모듈, 공통 BOM 의존성 관리', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Gradle', 'Kotlin DSL'], guideRef: '6.2절', estimatedDays: 1 },
+          { id: 't5-1-2', title: '모듈별 build.gradle.kts 책임 분리', description: 'fass-core(공통), fass-biz(서비스·레포지토리), fass-api(컨트롤러·DTO), fass-batch(Job)', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring Boot 3.x', 'Java 21'], guideRef: '6.2절', estimatedDays: 2 },
+          { id: 't5-1-3', title: 'Java 21 가상 스레드 설정', description: 'spring.threads.virtual.enabled=true, TomcatProtocolHandlerCustomizer 빈 설정', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['Java 21'], guideRef: '3.3절', estimatedDays: 1 },
+        ],
+      },
+      {
+        id: 'us5-2', asA: '프론트엔드 개발자', iWantTo: 'Figma Dev Mode 수치 기반 공통 컴포넌트를 Atomic Design으로 계층화해 신규 화면 개발 시 Organism 조립만으로 완성하고 싶다',
+        soThat: '신규 화면 UI 작업 시간을 50% 단축하고 Figma와 실제 UI 불일치를 없앨 수 있다',
+        asBefore: '개발자마다 다른 버튼 스타일. 동일 컴포넌트 20곳 중복. Figma-코드 불일치',
+        toBe: 'Atom(Button/Input) → Molecule(SearchField) → Organism(DataTable) 계층. Figma 토큰 → tailwind.config.ts 연동',
+        priority: 'high', status: 'todo', storyPoints: 13,
+        acceptanceCriteria: ['Button: variant(primary/secondary/ghost/destructive), size(sm/md/lg)', 'SearchField: Input+Icon+Button+debounce', 'DataTable: 정렬·페이지네이션·Skeleton 내장'],
+        tasks: [
+          { id: 't5-2-1', title: 'Atoms 컴포넌트 구현 (Button·Input·Label·Badge)', description: 'cva() variant 관리, Figma Dev Mode 수치 기반, TypeScript Props', priority: 'high', status: 'todo', assigneeRole: '프론트', techStack: ['React 18', 'Tailwind CSS', 'cva'], guideRef: '7.1절', estimatedDays: 3 },
+          { id: 't5-2-2', title: 'Molecules·Organisms 구현 (SearchField·DataTable·GlobalHeader)', description: 'SearchField(Input+Icon+Button), DataTable(RealGrid 래퍼), GlobalHeader(authStore 연동)', priority: 'high', status: 'todo', assigneeRole: '프론트', techStack: ['React 18', 'Zustand'], guideRef: '7.1절', estimatedDays: 3 },
+        ],
+      },
+    ],
+    assignees: [기충영, 송민준, 심지훈, 김희찬, 이지상, 오준열],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 6 — 상태관리 및 API 통신 공통 모듈
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-6', number: 7,
+    title: '상태관리 및 API 통신 공통 모듈',
+    subtitle: 'State Management & API Communication',
+    description: 'Zustand 전역 상태, Axios 공통 인터셉터, TanStack Query 서버 데이터 캐싱, GlobalExceptionHandler 에러 응답 표준화를 완성합니다.',
+    status: 'todo', priority: 'high', duration: '2주', phase: 'Phase 2',
+    guideSection: '5장', icon: '⚡',
+    techStack: ['Zustand', 'Axios', 'TanStack Query (React Query)', 'Spring @RestControllerAdvice'],
+    goal: {
+      summary: '프론트-백엔드 전 구간 API 통신·상태·에러 처리를 표준화하여 코드 중복을 제거한다',
+      problem: '화면마다 Axios 인스턴스 개별 생성, 에러 처리 70곳 중복. 백엔드 에러 응답 포맷 API마다 다름. props drilling 5단계 심화',
+      objective: 'Axios 단일 인스턴스 + Interceptor. Zustand 스토어 패턴 확립. TanStack Query 캐싱 표준화. GlobalExceptionHandler 에러 포맷 통일',
+      deliverables: ['src/services/apiClient.ts', 'authStore/uiStore/menuStore', 'QueryClient 공통 설정', 'GlobalExceptionHandler (ErrorResponse 포맷)'],
+      dependencies: ['Sprint 3 완료 (JWT)', 'Sprint 5 완료 (컴포넌트)'],
+    },
+    ossDetails: [
+      {
+        name: 'Zustand',
+        version: '5.x',
+        role: '경량 전역 상태 관리 — Context API·Redux 대비 보일러플레이트 90% 감소',
+        why: 'Redux: 액션·리듀서·미들웨어 복잡. Context API: 불필요한 리렌더링. Zustand: create() 한 줄로 스토어 정의, 선택적 구독으로 최적화',
+        setupSteps: [
+          '① npm install zustand',
+          '② authStore.ts: create<AuthState>()로 user·accessToken·logout 정의',
+          '③ uiStore.ts: toast·modal·drawer 전역 상태 (openModal·closeModal·showToast)',
+          '④ menuStore.ts: 메뉴 목록·활성 메뉴 상태',
+          '⑤ 컴포넌트: const user = useAuthStore(state => state.user) — 필요한 상태만 구독',
+          '⑥ devtools 미들웨어로 Redux DevTools 연동 (개발 환경)',
+        ],
+        keyConfig: 'const useAuthStore = create<AuthState>()(devtools(set => ({ user: null, logout: () => set({ user: null }) })))',
+        pitfalls: ['스토어 전체 구독(useAuthStore()) 금지 — 특정 selector만 구독해야 불필요 리렌더 방지', 'Zustand 상태는 새로고침 시 초기화 → persist 미들웨어 사용 고려'],
+        references: ['5.1절 Zustand 활용 가이드'],
+      },
+      {
+        name: 'TanStack Query (React Query)',
+        version: '5.x',
+        role: '서버 데이터 페칭·캐싱·동기화 — 로딩/에러 상태 자동 관리',
+        why: '서버 상태(API 응답)를 클라이언트 상태와 분리. staleTime으로 중복 요청 방지. 자동 백그라운드 리페칭으로 최신 데이터 유지',
+        setupSteps: [
+          '① npm install @tanstack/react-query',
+          '② QueryClient 설정: defaultOptions { queries: { staleTime: 5 * 60 * 1000, retry: 2 } }',
+          '③ App.tsx: <QueryClientProvider client={queryClient}>로 래핑',
+          '④ useQuery({ queryKey: ["users", userId], queryFn: () => fetchUser(userId) })',
+          '⑤ useMutation({ mutationFn: createUser, onSuccess: () => queryClient.invalidateQueries() })',
+          '⑥ React Query DevTools 설치 (개발 환경)',
+        ],
+        keyConfig: 'useQuery({ queryKey: ["users"], queryFn: fetchUsers, staleTime: 5 * 60_000 })',
+        pitfalls: ['queryKey 배열 일관성 유지 필수 — queryKey 불일치 시 캐시 미히트', 'Axios 에러를 throw하지 않으면 useQuery가 성공으로 인식'],
+        references: ['3.1절 OSS 스택 — TanStack Query'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us6-1', asA: '프론트엔드 개발자', iWantTo: '5xx 에러 시 화면마다 try-catch 없이도 공통 토스트가 자동 표시되길 원한다',
+        soThat: 'API 호출 코드에서 에러 처리를 분리하고 비즈니스 로직에만 집중할 수 있다',
+        asBefore: '70개 화면마다 try-catch 중복. 에러 메시지 문구 화면마다 다름',
+        toBe: 'Response Interceptor에서 5xx → uiStore.showToast() 자동 호출',
+        priority: 'high', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: ['5xx 에러 시 공통 토스트 자동 표시', '401 → Silent Refresh 시도 → 실패 시 /login 리다이렉트', '429 → "잠시 후 다시 시도해주세요" 토스트'],
+        tasks: [
+          { id: 't6-1-1', title: 'Axios 공통 인스턴스 + Response Interceptor', description: 'baseURL·timeout, 401→Silent Refresh, 429→Rate Limit 토스트, 5xx→공통 에러', priority: 'high', status: 'todo', assigneeRole: '프론트', techStack: ['Axios', 'TypeScript'], guideRef: '5.2절', estimatedDays: 2 },
+          { id: 't6-1-2', title: 'Zustand uiStore (Toast·Modal·Drawer)', description: 'showToast(msg,type), openModal(id,props), openDrawer — 컴포넌트 단에서 props 없이 호출', priority: 'high', status: 'todo', assigneeRole: '프론트', techStack: ['Zustand'], guideRef: '5.1절·9.3절', estimatedDays: 1 },
+          { id: 't6-1-3', title: 'GlobalExceptionHandler + ErrorResponse 표준', description: '@RestControllerAdvice, ErrorResponse{code,message,timestamp}, 스택트레이스 미노출', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring Boot'], guideRef: '1.4절·5.2.4절', estimatedDays: 2 },
+          { id: 't6-1-4', title: 'Zustand authStore + 로그인 UI (Sprint 3 인증 연동)', description: 'user/accessToken 상태 관리, Silent Refresh 복원(새로고침 시), Next.js /login 페이지, React Hook Form + Zod 입력 검증. Sprint 3 JwtTokenProvider와 연동 완성', priority: 'high', status: 'todo', assigneeRole: '프론트', techStack: ['Zustand', 'Next.js', 'React Hook Form', 'Zod'], guideRef: '5.1절·5.3절', estimatedDays: 3 },
+        ],
+      },
+    ],
+    assignees: [송민준, 김희찬, 오준열],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 7 — 멀티 컴퍼니
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-7', number: 8,
+    title: '멀티 컴퍼니 지원 (Multi-tenancy)',
+    subtitle: 'Multi-Company Support',
+    description: 'COMPANY_CD Discriminator Column, MyBatis Interceptor 자동 필터링, 마스터 데이터 기준, 법인별 동적 UI 테마를 구현합니다.',
+    status: 'todo', priority: 'high', duration: '3주', phase: 'Phase 2',
+    guideSection: '13장', icon: '🏢',
+    techStack: ['MyBatis Interceptor', 'CompanyContext ThreadLocal', 'JWT company_cd', 'CSS Variables', 'Strategy Pattern'],
+    goal: {
+      summary: '단일 코드베이스로 여러 법인이 데이터를 완전 격리하여 독립 운영하고, 법인별 브랜드를 동적으로 표현한다',
+      problem: '법인별 별도 DB·서버 운영 → 운영 비용 4배. 공통 기능 패치 시 법인별 각각 배포 필요. 데이터 크로스-테넌트 노출 위험',
+      objective: 'COMPANY_CD Discriminator로 단일 DB 멀티테넌시. MyBatis Interceptor가 모든 쿼리에 COMPANY_CD 자동 삽입. 전사공통/법인전용 마스터 데이터 분리 기준 수립',
+      deliverables: ['COMPANY_CD 테이블 설계 표준', 'CompanyContextInterceptor (MyBatis)', 'CompanyContext ThreadLocal', '전사공통/법인전용 마스터 데이터 관리 기준', 'useCompanyTheme React Hook'],
+      dependencies: ['Sprint 3 완료 (JWT — company_cd 클레임)', 'Sprint 4 완료 (권한관리)'],
+    },
+    ossDetails: [
+      {
+        name: 'MyBatis 3.x (Interceptor 플러그인)',
+        version: '3.5.x',
+        role: 'SQL 실행 전 WHERE COMPANY_CD 자동 추가 — 개발자 실수로 인한 크로스테넌트 데이터 노출 차단',
+        why: 'JPA @Filter 대비 MyBatis Interceptor: 네이티브 SQL까지 제어 가능. @SkipCompanyFilter 어노테이션으로 공통코드 등 예외 허용',
+        setupSteps: [
+          '① @Intercepts({ @Signature(type=StatementHandler.class, method="prepare", args={...}) }) 선언',
+          '② SQL 파싱: SELECT 쿼리에 WHERE COMPANY_CD = #{companyCd} 자동 추가',
+          '③ @SkipCompanyFilter 어노테이션 정의 및 인터셉터에서 확인 로직',
+          '④ CompanyContext.getCompanyCd() — JWT 필터에서 ThreadLocal에 저장된 회사코드 조회',
+          '⑤ AOP @Before로 요청 시작 시 CompanyContext 설정, @After로 clear()',
+          '⑥ 단위 테스트: CompanyA 사용자 → CompanyB 데이터 조회 시 0건 반환 검증',
+        ],
+        keyConfig: '@SkipCompanyFilter // 공통코드 등 전사 공유 데이터 테이블에 적용',
+        pitfalls: ['UPDATE·DELETE 쿼리에도 COMPANY_CD 조건 추가 필수', 'INSERT 시 COMPANY_CD 값 자동 주입 로직 별도 구현 필요'],
+        references: ['13.2절 자동 쿼리 필터링'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us7-1', asA: '개발자', iWantTo: 'WHERE COMPANY_CD를 명시하지 않아도 타 법인 데이터가 조회되지 않기를 원한다',
+        soThat: '개발자 실수로 인한 크로스-테넌트 데이터 노출 사고를 방지할 수 있다',
+        asBefore: 'COMPANY_CD 조건 수동 추가. 누락 시 전 법인 데이터 조회됨',
+        toBe: 'MyBatis Interceptor가 모든 쿼리에 WHERE COMPANY_CD = ? 자동 추가',
+        priority: 'high', status: 'todo', storyPoints: 13,
+        acceptanceCriteria: ['CompanyA 사용자 → CompanyB 데이터 조회 API → 0건 반환', '@SkipCompanyFilter로 공통코드 예외 처리 가능', 'CompanyContext.getCompanyCd() ThreadLocal 반환'],
+        tasks: [
+          { id: 't7-1-1', title: 'CompanyContext ThreadLocal 유틸리티', description: 'ThreadLocal<String>, JWT 필터에서 company_cd 추출·저장, 요청 종료 시 remove()', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Java 21'], guideRef: '13.2절', estimatedDays: 1 },
+          { id: 't7-1-2', title: 'MyBatis CompanyContextInterceptor', description: 'SQL 파싱 후 WHERE COMPANY_CD 자동 추가, @SkipCompanyFilter 예외 처리, 단위 테스트', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['MyBatis'], guideRef: '13.2절', estimatedDays: 3 },
+          { id: 't7-1-3', title: '전사공통/법인전용 마스터 데이터 기준 수립 (13.4절)', description: '전사공통(COMPANY_CD=\'SYSTEM\'): 국가코드·통화코드. 법인전용: 부서·인사·거래처. 기준 문서화', priority: 'medium', status: 'todo', assigneeRole: 'PL', techStack: ['PostgreSQL'], guideRef: '13.4절', estimatedDays: 1 },
+          { id: 't7-1-4', title: 'useCompanyTheme React Hook + CSS Variables 주입', description: '로그인 후 테마 API 조회 → CSS Variables 동적 주입. 법인 Strategy Pattern 비즈니스 분기', priority: 'medium', status: 'todo', assigneeRole: '프론트', techStack: ['React', 'CSS Variables'], guideRef: '13.3절', estimatedDays: 2 },
+        ],
+      },
+    ],
+    assignees: [기충영],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 8 — 공통 UI 컴포넌트 라이브러리
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-8', number: 9,
+    title: '공통 UI 컴포넌트 라이브러리 (RealGrid·Modal·Suspense)',
+    subtitle: 'Common UI Component Library',
+    description: 'RealGrid-React 데이터 그리드, 컬럼 개인화 저장/복원, Zustand 기반 Modal·Drawer 전역 관리, React 18 Suspense+Skeleton UI를 완성합니다.',
+    status: 'todo', priority: 'medium', duration: '3주', phase: 'Phase 2',
+    guideSection: '9장·10.2절', icon: '🎨',
+    techStack: ['RealGrid-React', 'Zustand uiStore', 'React 18 Suspense', 'Skeleton UI'],
+    goal: {
+      summary: 'RealGrid 표준 그리드와 Modal/Drawer 전역 관리로 데이터 중심 업무 화면 개발 생산성을 극대화한다',
+      problem: '그리드 라이브러리 화면마다 다른 설정. 컬럼 설정 새로고침 시 초기화. Modal 상태 props 5단계 drilling',
+      objective: 'JetteDataGrid 래퍼로 표준 그리드. saveColumnLayout/setColumnLayout으로 DB 개인화. Zustand uiStore로 Modal/Drawer 전역 관리',
+      deliverables: ['JetteDataGrid 컴포넌트', '컬럼 레이아웃 저장·복원 API+Hook', 'GlobalModal·GlobalDrawer Organism', 'Suspense+Skeleton 표준 패턴'],
+      dependencies: ['Sprint 5 완료 (Atomic Design)', 'Sprint 6 완료 (uiStore)'],
+    },
+    ossDetails: [
+      {
+        name: 'RealGrid-React',
+        version: '최신',
+        role: '대용량 데이터 처리 특화 그리드 — 엑셀 유사 UX, 가상 스크롤, 컬럼 개인화',
+        why: 'AG Grid·Handsontable 대비 한국 업무 환경 최적화. 100만 행 가상 스크롤, 셀 병합, 고정 컬럼, 엑셀 내보내기 기본 내장',
+        setupSteps: [
+          '① npm install realgrid realgrid-react',
+          '② LocalDataProvider + GridView 초기화',
+          '③ setupGrid 콜백에서 setFields()·setColumns() 설정',
+          '④ 컬럼 레이아웃 저장: gridView.saveColumnLayout() → JSON → /api/v1/grid-layouts',
+          '⑤ 화면 로드: GET /api/v1/grid-layouts/{screenId} → gridView.setColumnLayout()',
+          '⑥ "use client" 지시어 필수 (Next.js — 브라우저 전용 라이브러리)',
+        ],
+        keyConfig: '"use client"; // RealGrid는 브라우저 전용 — Next.js App Router에서 필수',
+        pitfalls: ['SSR 환경에서 window 참조 오류 → dynamic import({ ssr: false }) 사용', '컬럼 레이아웃 screenId 단위 분리 저장 필수 (화면별 개인화 지원)'],
+        references: ['9.2절 데이터 그리드 RealGrid-React'],
+      },
+      {
+        name: 'React 18 Suspense + Skeleton UI',
+        version: 'React 18.x',
+        role: '비동기 데이터 로딩 시 Skeleton UI로 체감 성능 향상, 레이아웃 깨짐 방지',
+        why: '기존 로딩 스피너: 화면 전체 블로킹. Suspense: 컴포넌트 단위 부분 로딩. Skeleton: 레이아웃 유지하며 로딩 표시',
+        setupSteps: [
+          '① React 18 Concurrent Mode 기본 활성화 (ReactDOM.createRoot)',
+          '② <Suspense fallback={<PageSkeleton />}>로 비동기 컴포넌트 래핑',
+          '③ Next.js app/[route]/loading.tsx → 자동 Suspense fallback 적용',
+          '④ Skeleton 컴포넌트: animate-pulse + bg-muted로 구현',
+          '⑤ 데이터 페칭: TanStack Query use() 훅 또는 Server Component async/await',
+          '⑥ error.tsx: ErrorBoundary 자동 적용 (Next.js App Router)',
+        ],
+        keyConfig: '<Suspense fallback={<TableSkeleton rows={10} />}><DataTableContainer /></Suspense>',
+        pitfalls: ['Suspense는 데이터 페칭이 완료될 때까지 기다림 → 페이지 단위 적용 시 전체 블로킹 발생', 'Skeleton 높이·너비를 실제 컨텐츠와 일치시켜야 레이아웃 깜빡임 방지'],
+        references: ['10.2절 비동기 UX Suspense·Skeleton'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us8-1', asA: '업무 담당자', iWantTo: '그리드 컬럼 순서·너비 설정이 다음 로그인 시에도 유지되길 원한다',
+        soThat: '자주 보는 컬럼을 앞에 배치해 업무 효율을 높일 수 있다',
+        asBefore: '컬럼 설정 새로고침 시 초기화. 엑셀 내보내기에 숨김 컬럼도 포함됨',
+        toBe: '"저장" 클릭 → DB에 JSON 저장 → 다음 로그인 시 자동 복원. 화면 ID별 개인화',
+        priority: 'high', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: ['saveColumnLayout() → API → DB 저장', '화면 로드 시 setColumnLayout() 자동 복원', '컬럼 숨김이 엑셀 다운로드에도 반영'],
+        tasks: [
+          { id: 't8-1-1', title: 'JetteDataGrid 래퍼 컴포넌트', description: 'realgrid-react 래퍼, 표준 columns/fields, setupGrid 패턴, 로딩 Skeleton 내장, "use client"', priority: 'high', status: 'todo', assigneeRole: '프론트', techStack: ['RealGrid-React'], guideRef: '9.2절', estimatedDays: 3 },
+          { id: 't8-1-2', title: '컬럼 레이아웃 API + useGridLayout Hook', description: 'POST/GET /api/v1/users/{id}/grid-layouts/{screenId}, useGridLayout(screenId) 자동 저장·복원', priority: 'medium', status: 'todo', assigneeRole: '풀스택', techStack: ['Spring Boot', 'TanStack Query'], guideRef: '9.2절', estimatedDays: 2 },
+          { id: 't8-1-3', title: 'GlobalModal·GlobalDrawer Organism + Suspense 표준화', description: 'uiStore 구독 동적 렌더링, AnimatePresence, Skeleton UI 표준 패턴 가이드', priority: 'medium', status: 'todo', assigneeRole: '프론트', techStack: ['Zustand', 'Framer Motion', 'React 18'], guideRef: '9.3절·10.2절', estimatedDays: 2 },
+        ],
+      },
+    ],
+    assignees: [심지훈, 이지상, 김희찬, 오준열],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 9 — 비즈니스 컴포넌트 가이드
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-9', number: 10,
+    title: '비즈니스 컴포넌트 개발 가이드 (DTO·MapStruct·Batch)',
+    subtitle: 'Business Component Guide',
+    description: 'DTO·MapStruct 매핑 자동화, POJO 비즈니스 로직, @Transactional 표준, Spring Batch fass-batch 모듈 구현 가이드를 완성합니다.',
+    status: 'todo', priority: 'medium', duration: '3주', phase: 'Phase 2',
+    guideSection: '8장·6.2절(fass-batch)', icon: '⚙️',
+    techStack: ['MapStruct', 'POJO', '@Transactional', 'JUnit 5', 'Spring Batch', 'Embedded Tomcat'],
+    goal: {
+      summary: 'DTO 변환 자동화·POJO 분리·Batch 모듈로 컴파일 타임 안전성과 배치 처리 표준을 확보한다',
+      problem: 'DTO-Entity 수동 변환 → 필드 추가 시 누락으로 런타임 NPE. @Service에 비즈니스·DB 혼재 → 단위 테스트 30초+ 소요. 배치 처리 방식 표준 없음',
+      objective: 'MapStruct unmappedTargetPolicy=ERROR로 컴파일 오류 강제. POJO 분리로 단위 테스트 < 500ms. Spring Batch fass-batch 모듈로 배치 표준화',
+      deliverables: ['MapStruct Mapper 가이드', 'POJO 비즈니스 로직 패턴', '@Transactional 가이드', 'Spring Batch Job/Tasklet 예제', '공통코드·사용자 관리 CRUD API'],
+      dependencies: ['Sprint 5 완료 (멀티모듈)'],
+    },
+    ossDetails: [
+      {
+        name: 'MapStruct',
+        version: '1.6.x',
+        role: 'DTO ↔ Entity 변환 코드 자동 생성 — 컴파일 타임 안전성 보장',
+        why: '수동 변환 코드 제거. unmappedTargetPolicy=ERROR로 필드 불일치 시 빌드 실패. ModelMapper 대비 컴파일 타임 검증·성능 우수',
+        setupSteps: [
+          '① build.gradle.kts: annotationProcessor("org.mapstruct:mapstruct-processor:1.6.x")',
+          '② @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)',
+          '③ UserMapper: UserDto toDto(User user); User toEntity(UserCreateRequestDto dto);',
+          '④ @MappingTarget UserDto update(User src, @MappingTarget UserDto target) — PATCH 지원',
+          '⑤ 빌드 시 build/generated/sources/annotationProcessor 자동 생성 확인',
+          '⑥ 테스트: 생성된 UserMapperImpl 필드 매핑 검증',
+        ],
+        keyConfig: '@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)',
+        pitfalls: ['Lombok과 함께 사용 시 annotationProcessor 순서 주의 (Lombok → MapStruct 순)', 'unmappedTargetPolicy=ERROR + @Mapping(target="id", ignore=true) 조합으로 의도적 무시 명시'],
+        references: ['8.1절 DTO 및 MapStruct 적용'],
+      },
+      {
+        name: 'Spring Batch',
+        version: 'Spring Boot 3.x 내장',
+        role: 'fass-batch 모듈 — 대용량 데이터 처리, 정기 집계·정산·마이그레이션 Job',
+        why: '단순 @Scheduled 방식 대비: 재시작·재처리·청크 단위 커밋으로 안정적 대용량 처리. Job 실행 이력 DB 관리',
+        setupSteps: [
+          '① fass-batch/build.gradle.kts: spring-boot-starter-batch 의존성',
+          '② @EnableBatchProcessing (Spring Batch 5.x: 자동 설정)',
+          '③ Job 정의: JobBuilder("dailyStockJob").start(stockStep).build()',
+          '④ Step(청크): StepBuilder("stockStep").<StockEntity, StockDto>chunk(1000, tx).reader(reader).processor(processor).writer(writer).build()',
+          '⑤ JobLauncher로 수동 실행 또는 @Scheduled("0 0 1 * * *")로 스케줄링',
+          '⑥ JobRepository: BATCH_JOB_INSTANCE·BATCH_JOB_EXECUTION 테이블 자동 생성',
+        ],
+        keyConfig: 'chunk(1000, transactionManager) // 1000건 단위 커밋 — 실패 시 해당 청크만 롤백',
+        pitfalls: ['Spring Batch 5.x: JobBuilderFactory 제거 → JobBuilder(name, jobRepository) 사용', 'BATCH 메타 테이블이 운영 DB에 혼재되지 않도록 별도 DataSource 권장'],
+        references: ['6.2절 fass-batch 모듈'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us9-1', asA: '백엔드 개발자', iWantTo: 'DTO-Entity 필드 불일치 시 런타임이 아닌 빌드 단계에서 오류가 발생하길 원한다',
+        soThat: '운영 환경 NPE를 배포 전에 차단하고 변환 코드 작성 시간을 없앨 수 있다',
+        asBefore: '수동 변환 코드. 필드 추가 누락 시 운영 NPE. 변환 코드가 전체 코드의 15%',
+        toBe: 'MapStruct 자동 생성. 불일치 시 컴파일 오류. 변환 코드 0줄',
+        priority: 'high', status: 'todo', storyPoints: 5,
+        acceptanceCriteria: ['DTO 필드 누락 시 컴파일 오류', 'UserMapper·OrderMapper 인터페이스 구현', 'MapStruct 단위 테스트 (필드 매핑 검증)'],
+        tasks: [
+          { id: 't9-1-1', title: 'MapStruct 설정 및 Mapper 가이드', description: 'build.gradle.kts 의존성, @Mapper 표준 설정, PATCH 지원 @MappingTarget 패턴', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['MapStruct', 'Gradle'], guideRef: '8.1절', estimatedDays: 1 },
+          { id: 't9-1-2', title: 'POJO 비즈니스 로직 분리 + @Transactional 가이드', description: 'OrderCalculator POJO, @Transactional 서비스 레이어, readOnly=true 조회 최적화, 안티패턴 문서', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Java 21', 'JUnit 5'], guideRef: '8.2~8.3절', estimatedDays: 2 },
+          { id: 't9-1-3', title: 'Spring Batch fass-batch 모듈 구조 및 예제 Job', description: '청크 단위 Job/Step/Reader/Processor/Writer 패턴, 일일 재고 집계 샘플 Job', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring Batch'], guideRef: '6.2절 fass-batch', estimatedDays: 3 },
+          { id: 't9-1-4', title: '공통코드·사용자 관리 CRUD API', description: '/api/v1/common-codes, /api/v1/users — DTO·MapStruct·POJO·@Transactional 레퍼런스 구현', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring Boot', 'PostgreSQL'], guideRef: '15.3절', estimatedDays: 3 },
+        ],
+      },
+    ],
+    assignees: [기충영, 송민준],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 10 — 외부 인터페이스 (API Gateway + 알림 + 그룹웨어)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-10', number: 11,
+    title: '외부 인터페이스 (API Gateway + 알림 + 그룹웨어)',
+    subtitle: 'External Interface & Notification',
+    description: 'Spring Cloud Gateway 단일 진입점, OpenAPI 3.0 통합 문서, 카카오 알림톡 공통 모듈, 그룹웨어 SOAP→REST 전환, Nginx SSL을 구현합니다.',
+    status: 'todo', priority: 'medium', duration: '3주', phase: 'Phase 3',
+    guideSection: '11장·6.1절(Nginx)', icon: '🌐',
+    techStack: ['Spring Cloud Gateway', 'OpenAPI 3.0', 'springdoc', 'Kakao BizMessage', 'Nginx', 'Spring Retry'],
+    goal: {
+      summary: 'DB Link·직접 API 호출의 강한 결합을 Spring Cloud Gateway 중심 표준 인터페이스로 전환하고, Nginx로 SSL·트래픽 제어를 중앙화한다',
+      problem: '외부 시스템 연동이 DB Link·SOAP·비표준 혼재. API 문서 없어 외부 개발자 협업 비용 과다. 알림톡 코드 3개 모듈 중복. SSL 각 서비스 개별 관리',
+      objective: 'Gateway 단일 진입점. OpenAPI 자동 문서. 알림톡 공통 모듈(재시도·로깅). 그룹웨어 SOAP→REST 전환. Nginx SSL Termination·로드밸런싱',
+      deliverables: ['Spring Cloud Gateway 라우팅·인증 필터', 'Swagger UI 통합', '카카오 알림톡 KakaoNotificationService', '그룹웨어 REST 전환 모듈', 'Nginx SSL Termination 설정'],
+      dependencies: ['Sprint 3 완료 (JWT)', 'Sprint 5 완료 (멀티모듈)'],
+    },
+    ossDetails: [
+      {
+        name: 'Spring Cloud Gateway',
+        version: 'Spring Cloud 2023.x',
+        role: 'API 단일 진입점 — 라우팅·인증·Rate Limit·CORS 중앙화. Nginx 뒤에서 애플리케이션 레벨 게이트웨이',
+        why: 'Zuul 1.x(동기 블로킹) 대비 Spring Cloud Gateway: WebFlux 기반 비동기·논블로킹. JWT 인증 필터, Rate Limiter, CircuitBreaker 내장',
+        setupSteps: [
+          '① spring-cloud-starter-gateway 의존성 (WebFlux 기반)',
+          '② application.yml: spring.cloud.gateway.routes - id·uri·predicates·filters 정의',
+          '③ JwtAuthenticationGatewayFilter: 토큰 검증 후 X-User-Id 헤더 추가',
+          '④ RequestRateLimiter 필터: Redis 기반 Rate Limit (초당 요청 수 제한)',
+          '⑤ CircuitBreakerFilter: Resilience4j 연동 (백엔드 장애 시 Fallback)',
+          '⑥ Swagger 집계: /v3/api-docs/{service} → 각 서비스 Swagger 통합',
+        ],
+        keyConfig: 'filters: [JwtAuthFilter, RequestRateLimiter=10,20,redis-rate-limiter]',
+        pitfalls: ['Gateway는 WebFlux(Reactive) 기반 — Spring MVC와 동일 프로젝트 혼용 불가', 'Swagger 통합 시 각 서비스 springdoc.api-docs.path 경로 충돌 주의'],
+        references: ['11.1절 API Gateway', '6.1절 Nginx + API Gateway 아키텍처'],
+      },
+      {
+        name: 'Nginx (Reverse Proxy + SSL Termination)',
+        version: '1.26.x',
+        role: 'HTTPS SSL Termination, 로드밸런싱, 정적 파일 서빙, Next.js 프론트엔드 리버스 프록시',
+        why: '각 서비스가 SSL 직접 관리 시 인증서 만료·갱신 복잡도 급증. Nginx 한 곳에서 SSL 처리 후 내부는 HTTP로 통신. 보안 강화',
+        setupSteps: [
+          '① nginx.conf: upstream 백엔드 서버 그룹 정의',
+          '② SSL: ssl_certificate /etc/ssl/jette.crt; ssl_certificate_key /etc/ssl/jette.key;',
+          '③ location /api/ { proxy_pass http://gateway:8080/; } — API Gateway 프록시',
+          '④ location / { proxy_pass http://frontend:3000/; } — Next.js 프론트 프록시',
+          '⑤ HTTP → HTTPS 리다이렉트: return 301 https://$host$request_uri;',
+          '⑥ Docker Compose: nginx 서비스, 80·443 포트 매핑',
+        ],
+        keyConfig: 'ssl_protocols TLSv1.2 TLSv1.3; ssl_ciphers HIGH:!aNULL:!MD5;',
+        pitfalls: ['Nginx에서 /api/ proxy_pass 시 trailing slash 유무에 따라 경로 변환 차이', 'WebSocket(Kafka UI 등) 프록시 시 upgrade·connection 헤더 추가 필요'],
+        references: ['6.1절 Nginx + API Gateway', '3.2절 인프라 기초'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us10-1', asA: '외부 개발자(3PL)', iWantTo: '단일 URL Swagger UI에서 모든 API 명세를 확인하고 직접 테스트하고 싶다',
+        soThat: 'Excel 문서 없이도 API를 빠르게 파악하고 연동 개발을 시작할 수 있다',
+        asBefore: 'API 문서 없거나 Excel 별도 공유. 문서-실제 API 불일치로 연동 오류 빈발',
+        toBe: 'Gateway /swagger-ui.html에서 모든 서비스 API 통합. Bearer Token 입력 후 직접 테스트',
+        priority: 'medium', status: 'todo', storyPoints: 5,
+        acceptanceCriteria: ['Gateway /swagger-ui.html에서 전체 API 조회', 'Bearer Token 설정 후 직접 API 테스트 가능', 'API 변경 시 문서 자동 반영'],
+        tasks: [
+          { id: 't10-1-1', title: 'Spring Cloud Gateway + Nginx SSL 설정', description: 'Gateway 라우팅·JWT 필터·Rate Limit, Nginx SSL Termination·리버스 프록시', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Spring Cloud Gateway', 'Nginx'], guideRef: '11.1절·6.1절', estimatedDays: 3 },
+          { id: 't10-1-2', title: 'OpenAPI 3.0 Swagger 통합 문서', description: 'springdoc-openapi 각 서비스 설정, Gateway 통합, Swagger UI 인증 버튼', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['springdoc', 'OpenAPI 3.0'], guideRef: '11.1절', estimatedDays: 2 },
+          { id: 't10-1-3', title: '카카오 알림톡 공통 모듈 (재시도·이력)', description: 'KakaoNotificationService, LG CNS REST API, Spring Retry 3회(지수 백오프), TB_NOTIFICATION_LOG', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring Retry', 'Spring Boot'], guideRef: '11.2절', estimatedDays: 2 },
+          { id: 't10-1-4', title: '그룹웨어 SOAP→REST 전환 모듈 (11.2절)', description: '기존 SOAP WebService 호출을 REST API 공통 모듈로 전환. 장기 목표: REST 표준 인터페이스 모듈', priority: 'low', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring Boot', 'REST'], guideRef: '11.2절 그룹웨어 연동', estimatedDays: 2 },
+        ],
+      },
+    ],
+    assignees: [기충영, 김희찬],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 11 — CDC 데이터 동기화 (Debezium + Kafka)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-11', number: 12,
+    title: 'CDC 데이터 동기화 파이프라인 (Debezium + Kafka)',
+    subtitle: 'CDC Data Synchronization',
+    description: 'Oracle → PostgreSQL 실시간 동기화. Debezium Oracle Connector, Apache Kafka+Zookeeper, Schema Registry, JDBC Sink Connector를 구축합니다.',
+    status: 'todo', priority: 'medium', duration: '3주', phase: 'Phase 3',
+    guideSection: '12장', icon: '🔄',
+    techStack: ['Debezium 2.x', 'Apache Kafka 3.x', 'Zookeeper', 'Confluent Schema Registry', 'JDBC Sink Connector', 'Oracle LogMiner'],
+    goal: {
+      summary: '서비스 중단 없이 Oracle 데이터를 PostgreSQL로 실시간 동기화하여 빅뱅 마이그레이션 리스크를 제거한다',
+      problem: '빅뱅 마이그레이션: 주말 서비스 중단 8~12시간. 전환 실패 시 롤백 절차 불명확. 병행 운영 기간 데이터 정합성 보장 불가',
+      objective: 'Debezium이 Oracle Redo Log 직접 읽기(소스 DB 부하 최소). Kafka 버퍼로 안정 전달. JDBC Sink Upsert로 PostgreSQL 실시간 반영. 데이터 지연 < 1초',
+      deliverables: ['Oracle Archive Log + Debezium 계정 설정 SQL', 'Debezium Oracle Source Connector JSON', 'Schema Registry 스키마 등록', 'JDBC Sink Connector JSON', '정합성 검증 스크립트', '운영 플레이북'],
+      dependencies: ['Sprint 1 완료 (Docker/Kafka 환경)'],
+    },
+    ossDetails: [
+      {
+        name: 'Apache Kafka 3.x + Zookeeper',
+        version: 'Kafka 3.7.x / Zookeeper 3.8.x',
+        role: 'Debezium CDC 이벤트의 안정적 버퍼링·전달, 서비스 간 비동기 메시징 브로커',
+        why: 'CDC 이벤트를 순서 보장하며 내구성 있게 저장. Consumer Group으로 처리량 수평 확장. 재처리(offset 조정)로 장애 복구',
+        setupSteps: [
+          '① Docker Compose: zookeeper:3.8 (포트 2181) + kafka:3.7 (포트 9092) 정의',
+          '② Kafka Connect 클러스터 기동 (confluentinc/cp-kafka-connect)',
+          '③ 토픽 파티션·복제 계수 설정: oracle_server.SCHEMA.TABLE → partitions=3, replication-factor=2',
+          '④ Schema Registry 기동 (confluentinc/cp-schema-registry, 포트 8081)',
+          '⑤ Kafka Connect REST API로 Connector 등록: POST /connectors',
+          '⑥ Consumer Lag 모니터링: kafka-consumer-groups.sh --describe --group connect-',
+        ],
+        keyConfig: 'KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 // 개발환경, 운영은 3 이상',
+        pitfalls: ['Kafka 3.x KRaft 모드(Zookeeper 제거) 지원 — 단, Debezium은 KRaft 완전 지원 버전 확인 필요', '토픽 자동 생성(auto.create.topics.enable=true)은 운영에서 비활성화'],
+        references: ['12.4절 Kafka 및 Connector 설정', '3.2절 데이터 및 메시지 브로커'],
+      },
+      {
+        name: 'Debezium 2.x (Oracle Connector)',
+        version: '2.7.x',
+        role: 'Oracle Redo/Archive Log 기반 CDC — INSERT·UPDATE·DELETE 이벤트를 Kafka 토픽으로 발행',
+        why: '쿼리 폴링 방식 대비: DB 부하 없이 로그 읽기. 밀리초 단위 Near Real-time. 삭제 이벤트까지 캡처 가능',
+        setupSteps: [
+          '① Oracle 사전 설정: ARCHIVELOG 모드, ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS',
+          '② Debezium 계정 생성: CREATE USER debezium IDENTIFIED BY password',
+          '③ 권한 부여: GRANT SELECT, LOGMINING에 필요한 V$ 뷰들 선택 권한',
+          '④ Source Connector JSON: connector.class=OracleConnector, log.mining.strategy=online_catalog',
+          '⑤ snapshot.mode=initial → 기존 데이터 전체 이관 후 증분 동기화',
+          '⑥ table.include.list=SCHEMA.TABLE1,SCHEMA.TABLE2 — 동기화 대상 테이블 명시',
+        ],
+        keyConfig: '"log.mining.strategy": "online_catalog", "snapshot.mode": "initial"',
+        pitfalls: ['Oracle 19c 이상: LogMiner 권한 GRANT LOGMINING 추가 필요', 'log.mining.strategy=redo_log_catalog는 부하 큼 → online_catalog 권장', 'Supplemental Logging 없으면 UPDATE 시 변경 전 값 캡처 불가'],
+        references: ['12.3절 Oracle 설정', '12.4절 Debezium Connector 설정'],
+      },
+      {
+        name: 'Confluent Schema Registry',
+        version: '7.x',
+        role: 'Avro/JSON Schema 스키마 버전 관리 — 스키마 변경 시 하위 호환성 검증, 토픽별 스키마 중앙 저장',
+        why: 'Debezium 이벤트 구조 변경 시 Consumer 호환성 문제 방지. Avro 직렬화로 메시지 크기 70% 감소. 스키마 진화(evolution) 지원',
+        setupSteps: [
+          '① Docker Compose: confluentinc/cp-schema-registry (포트 8081)',
+          '② Debezium Connector: key.converter=io.confluent.kafka.serializers.KafkaAvroSerializer, schema.registry.url=http://schema-registry:8081',
+          '③ 스키마 등록: POST /subjects/{topic}-value/versions',
+          '④ 호환성 모드: BACKWARD (신규 스키마로 구버전 메시지 읽기 가능)',
+          '⑤ 스키마 진화 규칙: 필드 추가(default 값 필수), 필드 제거 불가(BACKWARD)',
+          '⑥ JDBC Sink: value.converter.schema.registry.url 설정',
+        ],
+        keyConfig: '"value.converter": "io.confluent.kafka.serializers.KafkaAvroSerializer", "schema.registry.url": "http://schema-registry:8081"',
+        pitfalls: ['스키마 레지스트리 다운 시 Producer/Consumer 모두 중단 → HA 구성 필수', 'BACKWARD 호환성: 신규 필드 추가 시 반드시 default 값 지정'],
+        references: ['12.1절 CDC 아키텍처 — Schema Registry', '12.4절 Connector 설정'],
+      },
+      {
+        name: 'JDBC Sink Connector (PostgreSQL)',
+        version: 'Confluent JDBC Connector 10.x',
+        role: 'Kafka 토픽의 CDC 이벤트를 PostgreSQL에 Upsert/Delete 반영',
+        why: 'insert.mode=upsert로 중복 이벤트 안전 처리. delete.enabled=true로 Oracle 삭제 이벤트 PostgreSQL에 반영. auto.evolve=true로 컬럼 자동 추가',
+        setupSteps: [
+          '① Sink Connector JSON: connector.class=JdbcSinkConnector, topics=oracle_server.SCHEMA.*',
+          '② insert.mode=upsert, pk.mode=record_key, pk.fields=ID',
+          '③ delete.enabled=true — Oracle DELETE → PostgreSQL DELETE 연동',
+          '④ auto.create=true, auto.evolve=true — 신규 테이블/컬럼 자동 생성',
+          '⑤ table.name.format=public.${topic} — 토픽명 → 테이블명 매핑 규칙',
+          '⑥ connection.url=jdbc:postgresql://postgres:5432/jette_db',
+        ],
+        keyConfig: '"insert.mode": "upsert", "pk.mode": "record_key", "delete.enabled": "true"',
+        pitfalls: ['insert.mode=upsert 시 pk.fields 누락이면 전체 행이 PK로 처리됨', 'auto.evolve=true는 운영 환경 주의 — 예상치 못한 컬럼 추가 가능'],
+        references: ['12.4절 JDBC Sink Connector 설정'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us11-1', asA: '인프라 담당자', iWantTo: 'Oracle 데이터 변경이 1초 이내에 PostgreSQL에 반영되고 서비스 중단 없이 마이그레이션을 완료하고 싶다',
+        soThat: '주말 서비스 중단 없이 점진적 전환이 가능하고 전환 실패 시 즉시 Oracle 롤백이 가능하다',
+        asBefore: '빅뱅 마이그레이션: 주말 8~12시간 서비스 중단. 롤백 절차 불명확',
+        toBe: 'Debezium Redo Log 읽기 → Kafka → JDBC Sink Upsert. 데이터 지연 < 1초',
+        priority: 'high', status: 'todo', storyPoints: 13,
+        acceptanceCriteria: ['Oracle 변경 후 1초 이내 PostgreSQL 반영', 'Initial Snapshot 완료 후 증분 동기화', 'Oracle DELETE → PostgreSQL DELETE 연동', 'Consumer Lag 모니터링 대시보드'],
+        tasks: [
+          { id: 't11-1-1', title: 'Oracle CDC 사전 설정 + Debezium 계정', description: 'ARCHIVELOG 모드, Supplemental Logging, Debezium 계정 생성·권한 부여 SQL 스크립트', priority: 'high', status: 'todo', assigneeRole: 'DBA', techStack: ['Oracle', 'SQL'], guideRef: '12.3절', estimatedDays: 1 },
+          { id: 't11-1-2', title: 'Kafka + Zookeeper + Schema Registry Docker 구성', description: 'docker-compose: kafka:3.7, zookeeper:3.8, cp-schema-registry, cp-kafka-connect, 파티션·복제 설정', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Kafka', 'Zookeeper', 'Schema Registry'], guideRef: '12.4절', estimatedDays: 2, subTasks: [{ id: 'st11-1-2-1', title: 'Docker Compose Kafka 구성', status: 'todo' }, { id: 'st11-1-2-2', title: 'Schema Registry 기동 검증', status: 'todo' }, { id: 'st11-1-2-3', title: 'Kafka Connect 클러스터 기동', status: 'todo' }] },
+          { id: 't11-1-3', title: 'Debezium Oracle Source Connector 등록', description: 'Connector JSON 작성, snapshot.mode=initial, log.mining.strategy=online_catalog, table.include.list 설정', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Debezium'], guideRef: '12.4절', estimatedDays: 2 },
+          { id: 't11-1-4', title: 'JDBC Sink Connector (PostgreSQL Upsert)', description: 'insert.mode=upsert, pk.mode=record_key, delete.enabled=true, auto.create·evolve 설정', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['JDBC Sink', 'PostgreSQL'], guideRef: '12.4절', estimatedDays: 2 },
+          { id: 't11-1-5', title: '데이터 정합성 검증 스크립트 + 운영 플레이북', description: 'Oracle-PostgreSQL 건수·체크섬 비교 Python 스크립트, Consumer Lag 알림, 장애 롤백 절차', priority: 'medium', status: 'todo', assigneeRole: '인프라', techStack: ['Python', 'SQL'], guideRef: '12.2절', estimatedDays: 2 },
+        ],
+      },
+    ],
+    assignees: [송민준, 김희찬],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 12 — 개발 명명 규칙 표준화
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-12', number: 13,
+    title: '개발 명명 규칙 표준화 (화면ID·프론트·백엔드·DB)',
+    subtitle: 'Development Naming Rules Standardization',
+    description: '15장 전체: 화면 ID(Screen ID) 명명 규칙, 프론트엔드 리소스 명명, 백엔드 객체·API 명명, DB 객체 명명 규칙을 코드 검증 자동화까지 포함해 표준화합니다.',
+    status: 'todo', priority: 'medium', duration: '2주', phase: 'Phase 2',
+    guideSection: '15장 전체', icon: '📏',
+    techStack: ['ESLint Custom Rule', 'ArchUnit', 'SonarQube Custom Rule', 'PostgreSQL'],
+    goal: {
+      summary: '시스템 전반의 리소스 명명 규칙을 표준화하고, 자동 검증 도구로 규칙 위반을 CI에서 차단한다',
+      problem: '화면 ID 체계 없어 권한 관리·로그 추적 불가. API URL 규칙 없어 /getUser, /UserList 혼재. DB 테이블명 대소문자 혼용. 컴포넌트명 비일관성',
+      objective: '화면 ID: [시스템]_[도메인]_[업무]_[순번] 형식 (W_DT_ST_001). API: kebab-case RESTful (/api/v1/stock-management/items). DB: snake_case 대문자 (TB_STOCK_ITEM). ESLint·ArchUnit으로 자동 검증',
+      deliverables: ['화면 ID 생성 유틸리티 + 등록 관리 화면', '프론트엔드 ESLint 커스텀 규칙 (컴포넌트 PascalCase)', '백엔드 ArchUnit 규칙 (패키지 구조·API URL 검증)', 'DB 명명 규칙 체크리스트 + SonarQube DB 규칙', '전사 명명 규칙 가이드 문서'],
+      dependencies: ['Sprint 1 완료 (ESLint 기반)', 'Sprint 5 완료 (멀티모듈·ArchUnit)'],
+    },
+    ossDetails: [
+      {
+        name: 'ESLint Custom Rule (프론트엔드 명명 검증)',
+        version: 'ESLint 9.x',
+        role: '컴포넌트 PascalCase, Hook camelCase, CSS kebab-case 규칙 자동 검증 — 커밋 전 차단',
+        why: '코드 리뷰에서 명명 지적 없애고 일관성 자동 보장. 신규 팀원도 규칙 학습 없이 즉시 준수',
+        setupSteps: [
+          '① .eslintrc.ts에 컴포넌트 명명 규칙 추가: react/display-name, @typescript-eslint/naming-convention',
+          '② naming-convention: 컴포넌트 파일 PascalCase(.tsx), Hook 파일 camelCase useXxx(.ts)',
+          '③ import/no-default-export 비활성화 (페이지 컴포넌트는 default export 허용)',
+          '④ Pre-commit Hook: husky + lint-staged로 커밋 전 ESLint 자동 실행',
+          '⑤ CI Pipeline: npm run lint — 위반 시 빌드 실패',
+          '⑥ 팀 공통 .eslintrc 파일을 fass-config-repo에서 배포',
+        ],
+        keyConfig: '"@typescript-eslint/naming-convention": [error, { selector: "typeLike", format: ["PascalCase"] }]',
+        pitfalls: ['ESLint 9.x flat config 형식으로 전환 필요 (.eslintrc → eslint.config.js)', 'Prettier와 규칙 충돌 시 eslint-config-prettier로 포맷 규칙 비활성화'],
+        references: ['15.2절 프론트엔드 리소스 명명 규칙', '2.2.3절 ESLint & Prettier'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us12-1', asA: '개발 팀 전체', iWantTo: '화면 ID·컴포넌트명·API URL·DB 테이블명 규칙을 IDE·CI에서 자동 검증하고 싶다',
+        soThat: '명명 규칙 위반을 코드 리뷰 없이도 사전 차단하고 전사 일관성을 유지할 수 있다',
+        asBefore: '/getUser·/UserList 혼재. TB_user·TbUser 혼용. 컴포넌트명 비일관성',
+        toBe: 'ESLint(프론트)·ArchUnit(백엔드)·SonarQube로 CI에서 자동 차단',
+        priority: 'medium', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: ['컴포넌트 파일 소문자 시작 시 ESLint 오류', 'API URL /getUser 형식 사용 시 ArchUnit 테스트 실패', 'DB 테이블 소문자 사용 시 체크리스트 경고'],
+        tasks: [
+          { id: 't12-1-1', title: '화면 ID 명명 규칙 + 생성 유틸리티 (15.1절)', description: '[W/M]_[DT/TL/PS]_[ST/OD]_[001] 형식 생성기, 화면 ID 등록·조회 관리 API', priority: 'high', status: 'todo', assigneeRole: '프론트+백', techStack: ['React', 'Spring Boot'], guideRef: '15.1절', estimatedDays: 2 },
+          { id: 't12-1-2', title: 'ESLint 커스텀 규칙 (15.2절 프론트 명명)', description: '컴포넌트 PascalCase, Hook useXxx camelCase, CSS kebab-case, Pre-commit husky 적용', priority: 'medium', status: 'todo', assigneeRole: '프론트', techStack: ['ESLint', 'husky'], guideRef: '15.2절', estimatedDays: 1 },
+          { id: 't12-1-3', title: 'ArchUnit 백엔드 명명 규칙 검증 (15.3절)', description: 'API URL kebab-case RESTful 검증, 클래스명 PascalCase, 메서드명 camelCase ArchUnit 테스트', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['ArchUnit'], guideRef: '15.3절', estimatedDays: 1 },
+          { id: 't12-1-4', title: 'DB 명명 규칙 체크리스트 + SonarQube (15.4절)', description: 'TB_/IX_/PK_ prefix, snake_case 대문자 검증 체크리스트. SonarQube DB 오브젝트 명명 규칙', priority: 'low', status: 'todo', assigneeRole: 'DBA', techStack: ['SonarQube', 'PostgreSQL'], guideRef: '15.4절', estimatedDays: 1 },
+        ],
+      },
+    ],
+    assignees: [기충영],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 13 — 공통 UI 컴포넌트 고도화 (명세 관리)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-13', number: 14,
+    title: 'Next.js SSR·RSC 최적화 및 Web Vitals',
+    subtitle: 'Next.js Performance Optimization',
+    description: 'Next.js App Router Server Component 최적화, SSR/SSG 전략, React 18 Concurrent Mode 활용, Web Vitals(LCP·FID·CLS) 개선을 구현합니다.',
+    status: 'todo', priority: 'medium', duration: '2주', phase: 'Phase 2',
+    guideSection: '10장·3.4절', icon: '🚀',
+    techStack: ['Next.js 14 App Router', 'React 18 RSC', 'Tailwind CSS', 'next/image', 'next/font'],
+    goal: {
+      summary: 'Next.js App Router의 RSC·Streaming을 활용해 초기 JS 번들을 50% 감소시키고 Core Web Vitals LCP < 2.5초를 달성한다',
+      problem: '기존 SPA: 전체 JS 번들 초기 로딩. 검색 노출 불가(SEO). 서버 데이터 페칭 시 워터폴 발생',
+      objective: 'RSC로 서버 렌더링 최대화. Streaming으로 부분 렌더링. next/image·font로 최적화. LCP < 2.5s, FID < 100ms, CLS < 0.1 달성',
+      deliverables: ['RSC/RCC 분리 가이드', 'SSR/SSG/ISR 전략 문서', 'next/image 이미지 최적화', 'next/font 폰트 최적화', 'Web Vitals 모니터링 설정'],
+      dependencies: ['Sprint 5 완료 (Next.js 기본 설정)'],
+    },
+    ossDetails: [
+      {
+        name: 'Next.js 14 App Router (RSC + Streaming)',
+        version: '14.x',
+        role: 'Server Component로 초기 JS 번들 감소, Streaming으로 부분 렌더링, 파일 시스템 기반 라우팅',
+        why: 'Pages Router의 getServerSideProps 복잡성 제거. RSC: 서버에서만 실행 → 클라이언트 번들 미포함. Streaming: 준비된 부분부터 즉시 전송',
+        setupSteps: [
+          '① 기본값: 모든 컴포넌트는 Server Component (번들 미포함)',
+          '② "use client" 최소화: 상호작용 필요한 Leaf 컴포넌트만 적용',
+          '③ 데이터 페칭: RSC에서 직접 fetch() — TanStack Query 불필요 (서버 측)',
+          '④ Streaming: <Suspense fallback={<Skeleton />}>로 부분 렌더링 활성화',
+          '⑤ next/image: 자동 WebP 변환·lazy loading·blur placeholder',
+          '⑥ next/font: Google Fonts 자동 자체 호스팅 (layout.tsx에서 적용)',
+        ],
+        keyConfig: '"use client" // 최소화 — 상호작용(onClick, useState) 필요한 Leaf 컴포넌트만',
+        pitfalls: ['Context·Zustand는 "use client" 컴포넌트 트리 안에서만 사용 가능', 'RSC에서 fetch() 호출 시 캐싱: fetch(url, { cache: "no-store" }) vs { next: { revalidate: 60 } }'],
+        references: ['10.1절 Next.js 라우팅 및 페이지 구성', '3.4절 프론트엔드 개발 환경'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us13-1', asA: '사용자', iWantTo: '메인 화면이 3초 이내에 로드되고 화면 깜빡임 없이 빠르게 표시되길 원한다',
+        soThat: '느린 로딩으로 인한 업무 지연 없이 즉시 작업을 시작할 수 있다',
+        asBefore: 'SPA 초기 JS 번들 5MB+. 첫 로딩 5~7초. 서버 데이터 페칭 시 워터폴',
+        toBe: 'RSC로 초기 번들 50% 감소. Streaming으로 주요 컨텐츠 2.5초 이내 표시',
+        priority: 'medium', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: ['LCP < 2.5초 (Core Web Vitals 기준)', '초기 JS 번들 크기 기존 대비 50% 감소', 'next/image 사용 시 WebP 자동 변환'],
+        tasks: [
+          { id: 't13-1-1', title: 'RSC/RCC 분리 가이드 + 컴포넌트 리팩토링', description: '"use client" 최소화 원칙, 서버 데이터 페칭 패턴, Context 경계 설정', priority: 'high', status: 'todo', assigneeRole: '프론트', techStack: ['Next.js', 'React 18'], guideRef: '10.1절', estimatedDays: 2 },
+          { id: 't13-1-2', title: 'next/image·font 최적화 + Web Vitals 모니터링', description: 'next/image 이미지 최적화, next/font 구글 폰트 자체 호스팅, Core Web Vitals 대시보드', priority: 'medium', status: 'todo', assigneeRole: '프론트', techStack: ['next/image', 'next/font'], guideRef: '3.4절·10.1절', estimatedDays: 2 },
+        ],
+      },
+    ],
+    assignees: [심지훈, 오준열],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 16 — 데이터 보안 (API 마스킹 Dynamic + DB 암호화 Static)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-15a', number: 15,
+    title: '데이터 보안 (API 마스킹 + DB 암호화)',
+    subtitle: 'Dynamic Masking & Static Encryption',
+    description: 'Jackson Serializer 기반 동적 API 마스킹(@Mask 어노테이션)과 JPA Attribute Converter 기반 AES-256 DB 정적 암호화를 FaSS 공통 프레임워크에 통합합니다.',
+    status: 'todo', priority: 'high', duration: '2주', phase: 'Phase 1',
+    guideSection: '14.3절·개인정보보호법', icon: '🔐',
+    techStack: ['Jackson', '@JsonSerialize', 'AES-256', 'JPA AttributeConverter', 'Spring Security', 'BCrypt'],
+    assignees: [기충영],
+    goal: {
+      summary: '개인정보를 API 응답 단계에서 권한별로 동적 마스킹하고, DB 저장 시점에 AES-256으로 정적 암호화해 개인정보보호법을 준수한다',
+      problem: '개인정보(주민번호·전화번호·계좌)가 API 응답에 평문 노출. DB 컬럼도 평문 저장 → 내부 관계자 조회 시 유출 가능. 마스킹 처리가 각 서비스마다 개별 구현돼 일관성 없음',
+      objective: 'fass-core 모듈에 @Mask 어노테이션 + MaskSerializer 공통 구현. JPA @Convert(converter=AES256Converter.class) 한 줄로 DB 암호화 자동 적용. 역할(ROLE_ADMIN / ROLE_USER)에 따라 마스킹 depth 차등 적용',
+      deliverables: [
+        '@Mask 어노테이션 + MaskType Enum (주민번호/전화/계좌/이메일/주소)',
+        'MaskSerializer (Jackson JsonSerializer 구현체)',
+        'AES256AttributeConverter (JPA AttributeConverter 구현체)',
+        'EncryptionKeyProvider (Vault 기반 키 관리)',
+        '권한별 마스킹 depth 설정 (application.yml)',
+        '통합 테스트: 마스킹 검증 + 암복호화 단위 테스트',
+      ],
+      dependencies: ['Sprint 3 완료 (JWT roles)', 'Sprint 4 완료 (@PreAuthorize RBAC)'],
+    },
+    ossDetails: [
+      {
+        name: 'Jackson Custom Serializer (@Mask Dynamic Masking)',
+        version: 'Jackson 2.17.x (Spring Boot 3.x 내장)',
+        role: 'API 응답 직렬화 단계에서 사용자 권한에 따라 개인정보 필드를 실시간 마스킹',
+        why: '비즈니스 로직 수정 없이 DTO 필드에 어노테이션 한 줄로 마스킹 적용. SecurityContext에서 현재 사용자 권한 조회 → 동적 마스킹 depth 결정. AOP 방식 대비 직렬화 단계 처리로 성능 오버헤드 최소화',
+        setupSteps: [
+          '① MaskType Enum 정의: NAME, SSN, PHONE, ACCOUNT, EMAIL, ADDRESS',
+          '② @Mask 어노테이션: @JacksonAnnotationsInside + @JsonSerialize(using=MaskSerializer.class)',
+          '③ MaskSerializer: SecurityContextHolder에서 roles 조회 → ROLE_ADMIN은 평문, ROLE_USER는 마스킹',
+          '④ MaskingUtils: "홍*동", "010-****-5678", "9**-**-*****" 패턴별 마스킹 로직',
+          '⑤ DTO 적용: @Mask(type=MaskType.SSN) private String ssn;',
+          '⑥ application.yml: masking.roles.full-access=ROLE_ADMIN,ROLE_MANAGER',
+        ],
+        keyConfig: '@Mask(type = MaskType.PHONE) private String phoneNumber; // → "010-****-5678"',
+        pitfalls: [
+          'SecurityContextHolder.getContext()가 비동기 스레드에서 null일 수 있음 — DelegatingSecurityContextExecutor 사용',
+          'List<DTO> 직렬화 시 MaskSerializer가 각 요소에 적용되는지 반드시 테스트',
+          'Swagger 문서에 마스킹 적용 필드 주석 명시 (API 소비자 혼란 방지)',
+        ],
+        references: ['14.3절 개인정보 마스킹', 'FaSS 공통 fass-core 모듈'],
+      },
+      {
+        name: 'JPA AttributeConverter (AES-256 Static Encryption)',
+        version: 'Jakarta Persistence 3.x (Spring Boot 3.x)',
+        role: 'DB 저장 시점에 엔티티 필드를 AES-256-GCM으로 자동 암호화, 조회 시 자동 복호화',
+        why: 'DB 직접 접근(DBA, 백업 파일 유출) 시에도 암호화된 값만 노출. @Convert 어노테이션 한 줄로 기존 엔티티 수정 최소화. Vault에서 암호화 키 주입으로 키 하드코딩 방지',
+        setupSteps: [
+          '① AES256AttributeConverter implements AttributeConverter<String, String>',
+          '② convertToDatabaseColumn(): AES-256-GCM 암호화 (IV 랜덤 생성, Base64 인코딩)',
+          '③ convertToEntityAttribute(): Base64 디코딩 → AES-256-GCM 복호화',
+          '④ EncryptionKeyProvider: @Value("${encryption.key}") — Vault/환경변수에서 주입',
+          '⑤ 엔티티 적용: @Convert(converter=AES256AttributeConverter.class) private String ssn;',
+          '⑥ DB 컬럼 길이: 암호화 후 평문 대비 약 1.5~2배 → VARCHAR(500) 이상 설정',
+        ],
+        keyConfig: '@Column(name = "ssn", length = 500)\n@Convert(converter = AES256AttributeConverter.class)\nprivate String ssn; // DB: 암호화된 Base64 문자열',
+        pitfalls: [
+          'JPQL WHERE 절에서 암호화 컬럼으로 검색 불가 — 검색용 해시 컬럼(SHA-256) 별도 추가 필요',
+          '키 변경(Key Rotation) 시 전체 레코드 재암호화 배치 작업 필요 — 운영 중단 위험, 사전 계획 필수',
+          'AES-256-GCM은 IV가 고정되면 보안 취약 — 반드시 매 암호화마다 랜덤 IV 생성',
+        ],
+        references: ['개인정보보호법 제24조(고유식별정보 처리 제한)', '14.3절 DB 암호화'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us15a-1', asA: '일반 사용자', iWantTo: 'API 응답에서 타인의 개인정보가 마스킹 처리되어 반환되길 바란다',
+        soThat: '업무상 필요한 데이터는 조회하면서 불필요한 개인정보 노출 없이 개인정보보호법을 준수할 수 있다',
+        asBefore: '모든 사용자가 API 응답에서 주민번호·전화번호·계좌번호 평문 수신. 권한 구분 없이 동일한 응답 반환',
+        toBe: 'ROLE_USER: "010-****-5678", "9**-**-*****" 마스킹. ROLE_ADMIN: 평문 수신. DTO @Mask 어노테이션 한 줄로 적용',
+        priority: 'high', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: [
+          'ROLE_USER로 호출 시 SSN → "9**-**-*****", 전화 → "010-****-5678" 마스킹',
+          'ROLE_ADMIN으로 호출 시 평문 반환',
+          'List<DTO> 응답에서도 마스킹 정상 동작',
+          '@Mask 어노테이션 제거 시 평문 반환 (기본 동작 유지)',
+        ],
+        tasks: [
+          { id: 't15a-1-1', title: '@Mask 어노테이션 + MaskType Enum 정의', description: 'fass-core 모듈: MaskType(NAME/SSN/PHONE/ACCOUNT/EMAIL/ADDRESS) Enum, @Mask 어노테이션 정의', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Java', 'Jackson'], guideRef: '14.3절', estimatedDays: 1 },
+          { id: 't15a-1-2', title: 'MaskSerializer 구현 (권한별 마스킹 depth)', description: 'Jackson JsonSerializer<String> 구현. SecurityContextHolder roles 조회 → MaskingUtils 호출', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Jackson', 'Spring Security'], guideRef: '14.3절', estimatedDays: 2, subTasks: [{ id: 'st15a-1-2-1', title: 'MaskingUtils 패턴별 마스킹 로직', status: 'todo' }, { id: 'st15a-1-2-2', title: '권한별 depth 설정 (application.yml)', status: 'todo' }] },
+          { id: 't15a-1-3', title: '주요 DTO @Mask 어노테이션 적용 + 통합 테스트', description: 'TB_USER, TB_MEMBER DTO 필드 적용. 권한별 마스킹 결과 검증 테스트', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['JUnit 5', 'Spring Boot Test'], guideRef: '14.3절', estimatedDays: 1 },
+        ],
+      },
+      {
+        id: 'us15a-2', asA: 'DBA / 보안 담당자', iWantTo: '고유식별정보(주민번호 등)가 DB에 저장될 때 자동으로 암호화되길 바란다',
+        soThat: 'DB 파일 유출·백업 유출 시에도 개인정보 평문이 노출되지 않아 개인정보보호법을 준수할 수 있다',
+        asBefore: 'TB_USER.ssn 컬럼에 평문 저장. DBA가 SELECT 한 번으로 전 고객 주민번호 조회 가능',
+        toBe: '@Convert(converter=AES256AttributeConverter.class) 한 줄 추가 → 저장 시 자동 AES-256-GCM 암호화. DB 직접 조회 시 Base64 암호문만 노출',
+        priority: 'high', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: [
+          'INSERT 후 DB 직접 조회 시 암호화된 Base64 문자열 확인',
+          'JPA 조회 시 복호화된 평문 반환',
+          '암호화 키 Vault에서 주입 (환경변수 하드코딩 없음)',
+          'SHA-256 검색 해시 컬럼으로 WHERE 조건 검색 동작',
+        ],
+        tasks: [
+          { id: 't15a-2-1', title: 'AES256AttributeConverter 구현 (AES-256-GCM)', description: 'convertToDatabaseColumn: 랜덤 IV + AES-256-GCM 암호화 → Base64. convertToEntityAttribute: 복호화', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['JPA', 'AES-256', 'GCM'], guideRef: '14.3절 DB 암호화', estimatedDays: 2 },
+          { id: 't15a-2-2', title: 'EncryptionKeyProvider — Vault 키 주입', description: 'HashiCorp Vault KV에서 encryption.key 조회. Key Rotation 대비 키 버전 관리', priority: 'high', status: 'todo', assigneeRole: '백엔드·인프라', techStack: ['Vault', 'Spring Cloud Vault'], guideRef: '3.2절 Vault', estimatedDays: 1 },
+          { id: 't15a-2-3', title: '검색용 SHA-256 해시 컬럼 추가 + 엔티티 적용', description: 'ssn_hash VARCHAR(64): SHA-256(ssn). WHERE ssn_hash = ? 검색 지원. TB_USER @Convert 적용', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['PostgreSQL', 'JPA'], guideRef: '14.3절', estimatedDays: 1 },
+        ],
+      },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 18 — APIM (API Management)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-16', number: 16,
+    title: 'APIM (API Management)',
+    subtitle: 'API Lifecycle & Traffic Control',
+    description: 'API 생명주기 중앙 관리, Throttling(트래픽 제어), 인증/인가 통합, API 버전 관리를 Kong Gateway 또는 Spring Cloud Gateway 기반으로 구현합니다.',
+    status: 'todo', priority: 'high', duration: '3주', phase: 'Phase 2',
+    guideSection: '11장·API 설계 원칙', icon: '🌐',
+    techStack: ['Kong Gateway', 'Spring Cloud Gateway', 'Rate Limiting', 'OAuth2', 'OpenAPI 3.0', 'Prometheus', 'Grafana'],
+    assignees: [기충영, 김희찬],
+    goal: {
+      summary: '급증하는 외부 인터페이스(3PL/화주사/AI 서비스)에 대비해 API 트래픽을 중앙에서 제어하고, 생명주기를 체계적으로 관리하여 서비스 안정성을 확보한다',
+      problem: '외부 연동이 서비스마다 직접 노출돼 인증·Rate Limit 정책 불일치. 3PL 파트너사 과도한 API 호출로 서비스 다운 위험. API 버전 관리 없어 하위 호환성 깨짐. 개발/운영 API 엔드포인트 혼용',
+      objective: 'Kong/Spring Cloud Gateway APIM 레이어: 모든 외부 API 단일 진입점. 서비스별 Throttling 정책(RPS 제한). JWT + API Key 이중 인증. OpenAPI 3.0 기반 API 카탈로그 포털. Deprecation → Sunset 헤더 기반 생명주기 관리',
+      deliverables: [
+        'APIM 아키텍처 설계서 (Kong Plugin 구성)',
+        'Rate Limiting 정책 (서비스별 RPS/일간 호출 한도)',
+        'API Key 발급·관리 시스템 (파트너사 등록)',
+        'OpenAPI 3.0 API 카탈로그 포털 (Swagger UI 통합)',
+        'API 버전 관리 정책 (/v1/, /v2/, Deprecation 헤더)',
+        'Prometheus + Grafana API 메트릭 대시보드',
+      ],
+      dependencies: ['Sprint 10 완료 (Spring Cloud Gateway)', 'Sprint 3 완료 (JWT 인증)'],
+    },
+    ossDetails: [
+      {
+        name: 'Kong Gateway (APIM)',
+        version: 'Kong 3.6.x (OSS)',
+        role: 'API 단일 진입점 — Rate Limiting, 인증(JWT/API Key), 로깅, 변환, 모니터링 플러그인 중앙 관리',
+        why: 'Spring Cloud Gateway 대비 플러그인 생태계 풍부 (200+ 공식 플러그인). DB-less 모드로 YAML 선언적 설정. Prometheus 메트릭 내장. 엔터프라이즈 APIM 기능 오픈소스로 제공',
+        setupSteps: [
+          '① Docker Compose: kong:3.6-oss 컨테이너, PostgreSQL 또는 DB-less YAML 설정',
+          '② Service + Route 등록: fass-api → upstream 서비스 매핑',
+          '③ Rate Limiting 플러그인: consumer별/서비스별 RPS 제한 (Redis 기반 분산 카운터)',
+          '④ JWT 플러그인: Keycloak JWK URI 연동 → 토큰 검증 Kong에서 처리',
+          '⑤ API Key 플러그인: 파트너사별 key-auth 발급 → Consumer 그룹 관리',
+          '⑥ Prometheus 플러그인: 메트릭 노출 → Grafana Kong 공식 대시보드 임포트',
+        ],
+        keyConfig: 'rate-limiting 플러그인: minute: 100, hour: 5000, policy: redis (분산 Rate Limit)',
+        pitfalls: [
+          'Kong과 Spring Cloud Gateway 이중 게이트웨이 운영 시 혼란 — 역할 분리 명확화 (Kong: 외부, SCG: 내부)',
+          'DB-less 모드: 선언적 설정 변경 시 Kong 재시작 필요 — 운영 중 변경은 Admin API 사용',
+          'Rate Limit Redis 미설정 시 단일 Kong 노드에만 적용 — 다중 노드 시 Redis 필수',
+        ],
+        references: ['11장 외부 인터페이스', 'API 설계 원칙 — 버전 관리'],
+      },
+      {
+        name: 'OpenAPI 3.0 API 카탈로그 (Swagger UI + springdoc)',
+        version: 'springdoc-openapi 2.x',
+        role: 'API 스펙 자동 생성 + 파트너사 셀프서비스 API 탐색 포털',
+        why: '파트너사(3PL/화주사)가 API 스펙 문서를 직접 탐색하고 테스트할 수 있는 셀프서비스 포털. Deprecation 헤더(Sunset)로 API 생명주기 명시. APIM Kong 통합으로 API Key 테스트 환경 제공',
+        setupSteps: [
+          '① springdoc-openapi-starter-webmvc-ui 의존성 추가',
+          '② @OpenAPIDefinition: 버전, 연락처, 라이선스 정보',
+          '③ @Operation, @ApiResponse: 모든 공개 API 어노테이션 작성',
+          '④ Deprecation: @Deprecated + response header Sunset: {date}',
+          '⑤ Kong Swagger Plugin: Kong 라우팅된 URL로 Swagger UI 접근',
+          '⑥ API Key 인증 버튼: SwaggerUI에서 API Key 직접 입력 테스트',
+        ],
+        keyConfig: 'springdoc.api-docs.path=/api-docs\nspringdoc.swagger-ui.path=/swagger-ui\nspringdoc.swagger-ui.operationsSorter=method',
+        pitfalls: [
+          'Swagger UI 운영 환경 노출 주의 — actuator처럼 내부망 또는 IP 제한 필수',
+          '@Hidden 어노테이션으로 내부 전용 API 문서 노출 제외',
+        ],
+        references: ['11.1절 Swagger 통합', 'API 설계 — OpenAPI 3.0'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us16-1', asA: '외부 파트너사 (3PL/화주사) 개발자', iWantTo: 'API Key 하나로 FaSS 공개 API를 호출하고 실시간 사용량 현황을 확인하고 싶다',
+        soThat: '별도 VPN·인증서 없이 표준 HTTP API로 물류 데이터를 연동하고, 호출 한도 초과 전에 대응할 수 있다',
+        asBefore: '파트너사마다 별도 연동 방식. 일부는 DB Link, 일부는 SOAP, 일부는 REST — 통일 안 됨. 과다 호출 시 서비스 장애 발생',
+        toBe: 'APIM 포털에서 API Key 발급 → Kong Rate Limit 1000 RPH 자동 적용 → 호출 80% 초과 시 이메일 경고 → 초과 시 429 Too Many Requests 반환',
+        priority: 'high', status: 'todo', storyPoints: 13,
+        acceptanceCriteria: [
+          'API Key 발급 → Kong Consumer 자동 등록',
+          '분당 100회 초과 시 429 반환, Retry-After 헤더 포함',
+          'Swagger UI에서 API Key 인증 후 직접 테스트 가능',
+          'Grafana 대시보드에서 파트너사별 API 호출량 실시간 조회',
+        ],
+        tasks: [
+          { id: 't16-1-1', title: 'Kong Gateway Docker 배포 + Service/Route 등록', description: 'kong:3.6-oss Docker Compose, fass-api Service + Route 매핑, Admin API 설정', priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Kong', 'Docker'], guideRef: '11장 API Gateway', estimatedDays: 2 },
+          { id: 't16-1-2', title: 'Rate Limiting + API Key 플러그인 설정', description: 'Redis 분산 Rate Limit(100 RPM / 5000 RPH), API Key 발급 API, Consumer 그룹 관리', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Kong', 'Redis'], guideRef: '11장 트래픽 제어', estimatedDays: 2 },
+          { id: 't16-1-3', title: 'OpenAPI 3.0 Swagger 카탈로그 포털 + Kong 통합', description: 'springdoc 설정, 공개 API @Operation 어노테이션, Kong Swagger Plugin 연동', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['springdoc', 'OpenAPI'], guideRef: '11.1절', estimatedDays: 2 },
+          { id: 't16-1-4', title: '[→Sprint 21] Kong 메트릭 Grafana 연동', description: 'Kong Prometheus 플러그인 활성화 → Sprint 21 Grafana에 Kong 공식 대시보드(ID:7424) 추가. Prometheus/Grafana 기반 설치는 Sprint 21에서 일괄 구성', priority: 'medium', status: 'todo', assigneeRole: '인프라', techStack: ['Kong', 'Prometheus'], guideRef: 'Sprint 21 모니터링', estimatedDays: 1 },
+        ],
+      },
+      {
+        id: 'us16-2', asA: '백엔드 개발자', iWantTo: 'API 버전(v1 → v2) 이관 시 Deprecation 헤더로 파트너사에게 사전 공지하고 생명주기를 관리하고 싶다',
+        soThat: 'v1 클라이언트 장애 없이 v2로 단계적 이관하고, 구버전 API 폐기 일정을 명확히 전달할 수 있다',
+        asBefore: 'API 변경 시 사전 공지 없이 배포 → 파트너사 장애 발생. 버전 구분 없이 URL 변경으로 하위 호환성 깨짐',
+        toBe: '/v1/ 유지 + Sunset 날짜 헤더 응답 → 90일 유예 → /v2/ 이관 완료 후 /v1/ Kong에서 비활성화',
+        priority: 'medium', status: 'todo', storyPoints: 5,
+        acceptanceCriteria: [
+          'Deprecated API 응답 헤더: Deprecation: true, Sunset: {date}',
+          'Kong 레벨에서 /v1/ 비활성화 시 503 + 이관 안내 메시지 반환',
+          'API 버전 정책 문서 Swagger UI 포털에 게시',
+        ],
+        tasks: [
+          { id: 't16-2-1', title: 'API 버전 관리 정책 수립 + Deprecation 헤더 구현', description: '/v1/, /v2/ URL 규칙, @Deprecated + Sunset 응답 헤더 Spring Filter 구현', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring Boot', 'HTTP Headers'], guideRef: '11장 API 버전 관리', estimatedDays: 2 },
+        ],
+      },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 19 — AI 연동 모듈 (물류·유통 AI 서비스 통신 표준화)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-17', number: 17,
+    title: 'AI 연동 모듈 (물류·유통 AI 서비스 통신 표준화)',
+    subtitle: 'AI Integration Module & Data Pipeline',
+    description: '(주)제때의 물류/유통 데이터를 외부 AI 서비스(수요예측·경로최적화·이상탐지)와 안전하게 송수신할 수 있도록 API 통신 규격, 데이터 전처리, 결과 후처리를 fass-core 표준 라이브러리로 공통화합니다.',
+    status: 'todo', priority: 'high', duration: '3주', phase: 'Phase 3',
+    guideSection: 'AI 연동 설계·11장', icon: '🤖',
+    techStack: ['Python FastAPI', 'Spring WebClient', 'Apache Kafka', 'Apache Spark / Flink', 'Protobuf / JSON Schema', 'Vault', 'Circuit Breaker'],
+    assignees: [송민준],
+    goal: {
+      summary: '물류 AI 서비스 호출을 표준 라이브러리로 공통화하여, 새로운 AI 서비스 추가 시 개발 기간을 최소화하고 데이터 보안·정합성을 보장한다',
+      problem: '각 서비스팀이 외부 AI API를 개별 호출 — 인증 방식·타임아웃·재시도 정책 불일치. 물류 데이터(화물중량·온도·GPS) 전처리 로직 중복 개발. AI 서비스 장애 시 전파 방지 체계 없어 연쇄 장애 위험',
+      objective: 'fass-core AI 연동 모듈: AiServiceClient 추상 인터페이스 → AI 서비스별 구현체. 데이터 전처리 파이프라인(정규화·마스킹·유효성 검증). Circuit Breaker + 비동기(Kafka) 이중 통신 전략. AI Agent 서비스 계정 Vault 자격증명 자동 갱신',
+      deliverables: [
+        'AiServiceClient 인터페이스 + 수요예측/경로최적화/이상탐지 구현체',
+        '물류 데이터 전처리 파이프라인 (DataPreprocessor — 정규화·마스킹·검증)',
+        'Circuit Breaker + Retry + Timeout 공통 설정 (Resilience4j)',
+        'Kafka 기반 비동기 AI 요청/응답 파이프라인 (대용량 배치 예측)',
+        'AI 응답 결과 후처리 + DB 저장 표준 패턴',
+        'AI 서비스 연동 통합 테스트 + Mock AI Server (WireMock)',
+      ],
+      dependencies: ['Sprint 3b 완료 (AI Agent 서비스 계정)', 'Sprint 10 완료 (API Gateway)', 'Sprint 11 완료 (Kafka)'],
+    },
+    ossDetails: [
+      {
+        name: 'Spring WebClient + Resilience4j (동기 AI 호출)',
+        version: 'Spring WebFlux 6.x + Resilience4j 2.x',
+        role: '실시간 AI API 동기 호출 — 비동기 논블로킹 HTTP, Circuit Breaker/Retry/Timeout 자동 적용',
+        why: 'RestTemplate(동기 블로킹) 대비 WebClient는 비동기 처리로 I/O 대기 중 스레드 낭비 없음. Resilience4j Circuit Breaker로 AI 서비스 장애 시 Fallback(기본값 반환) 자동 전환 → 연쇄 장애 방지',
+        setupSteps: [
+          '① WebClient Bean 등록: baseUrl, 타임아웃(connect 3s / read 30s), 재시도 3회',
+          '② AiServiceClient 인터페이스: predict(AiRequest) → Mono<AiResponse>',
+          '③ Resilience4j: @CircuitBreaker(name="aiService", fallbackMethod="defaultForecast")',
+          '④ Vault 자격증명: WebClient 헤더에 Bearer {ai-service-token} 자동 주입',
+          '⑤ DataPreprocessor: 물류 데이터 정규화(Min-Max), 개인정보 마스킹, null 검증',
+          '⑥ 응답 후처리: AiResponseMapper → FaSS 도메인 객체 변환 + DB 저장',
+        ],
+        keyConfig: 'resilience4j.circuitbreaker.instances.aiService.slidingWindowSize=10\nfailureRateThreshold=50\nwaitDurationInOpenState=30s',
+        pitfalls: [
+          'AI 서비스 응답 지연(30초↑) 시 WebClient 스레드 과점 주의 — Timeout 정책 AI 서비스별 별도 설정',
+          'Circuit Breaker OPEN 상태의 Fallback이 DB 오래된 예측값 반환 시 데이터 신선도 표시 필수',
+        ],
+        references: ['AI 연동 설계 — 동기 호출 패턴', '11장 외부 인터페이스'],
+      },
+      {
+        name: 'Apache Kafka (비동기 AI 배치 파이프라인)',
+        version: 'Kafka 3.7.x',
+        role: '대용량 물류 데이터 AI 배치 예측 — 비동기 요청/응답 파이프라인. 실시간 이상탐지 스트림 처리',
+        why: '수만 건 재고·운송 데이터 AI 예측은 HTTP 동기 호출 불가 → Kafka로 배치 비동기 처리. AI 서비스 다운 시 메시지 보존(토픽 재처리). 이상탐지는 실시간 스트림 처리 필요',
+        setupSteps: [
+          '① ai-request 토픽: FaSS → AI 서비스 예측 요청 (키: shipment_id)',
+          '② ai-response 토픽: AI 서비스 → FaSS 예측 결과 반환',
+          '③ KafkaProducer: DataPreprocessor 전처리 → JSON Schema 검증 → Produce',
+          '④ KafkaConsumer (AI 서비스): ai-request 소비 → 모델 추론 → ai-response Produce',
+          '⑤ FaSS KafkaConsumer: ai-response 소비 → AiResponseMapper → DB 저장',
+          '⑥ Dead Letter Queue: 처리 실패 메시지 → ai-request-dlq 토픽 → 알림',
+        ],
+        keyConfig: 'ai-request 토픽: partitions=6, replication-factor=3, retention.ms=86400000 (24시간)',
+        pitfalls: [
+          '요청-응답 상관관계 추적: correlation-id 헤더를 Kafka 레코드 헤더에 포함하여 비동기 매핑 필수',
+          'AI 서비스 처리 지연 시 ai-request 토픽 Consumer Lag 모니터링 — Grafana Kafka 대시보드 필수',
+        ],
+        references: ['Sprint 11 Kafka/Debezium', 'AI 연동 비동기 파이프라인'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us17-1', asA: '물류 서비스 개발자', iWantTo: 'AiServiceClient.predict() 한 번 호출로 AI 수요예측 결과를 받고 싶다',
+        soThat: '데이터 전처리·인증·Circuit Breaker 처리를 직접 구현하지 않고, 표준 라이브러리를 통해 AI 기능을 빠르게 통합할 수 있다',
+        asBefore: '각 서비스가 AI API 직접 HTTP 호출. 인증 토큰 갱신·타임아웃·재시도 코드 중복. AI 서비스 장애 시 연쇄 장애 발생',
+        toBe: 'AiServiceClient.predict(request) → DataPreprocessor 자동 실행 → Keycloak 서비스 계정 토큰 자동 주입 → Circuit Breaker 보호 → AiResponse 반환. 신규 AI 서비스 추가 시 구현체 1개만 개발',
+        priority: 'high', status: 'todo', storyPoints: 13,
+        acceptanceCriteria: [
+          'AiServiceClient.predict() 호출 → 데이터 전처리 자동 적용',
+          'AI 서비스 3회 연속 오류 → Circuit Breaker OPEN → Fallback 값 반환',
+          'Vault 서비스 계정 토큰 자동 갱신 (만료 전 15분)',
+          'WireMock AI Mock Server로 통합 테스트 통과',
+        ],
+        tasks: [
+          { id: 't17-1-1', title: 'AiServiceClient 인터페이스 + 수요예측 구현체', description: 'AiServiceClient<Req, Res> 제네릭 인터페이스, DemandForecastClient (WebClient + Circuit Breaker)', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring WebClient', 'Resilience4j'], guideRef: 'AI 연동 모듈', estimatedDays: 3 },
+          { id: 't17-1-2', title: 'DataPreprocessor — 물류 데이터 전처리 파이프라인', description: '정규화(Min-Max/Z-Score), 개인정보 마스킹(@Mask 활용), null/범위 유효성 검증, JSON Schema 직렬화', priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Java', 'Jackson', 'JSON Schema'], guideRef: 'AI 데이터 전처리', estimatedDays: 2 },
+          { id: 't17-1-3', title: 'Kafka 비동기 AI 배치 파이프라인 구성', description: 'ai-request/ai-response 토픽, KafkaProducer/Consumer, DLQ, correlation-id 매핑', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['Kafka', 'Spring Kafka'], guideRef: 'Sprint 11 Kafka', estimatedDays: 3 },
+          { id: 't17-1-4', title: 'WireMock AI Mock + 통합 테스트', description: 'WireMock으로 AI 서비스 시뮬레이션 (정상/오류/지연). Circuit Breaker + Fallback 통합 테스트', priority: 'medium', status: 'todo', assigneeRole: '백엔드', techStack: ['WireMock', 'JUnit 5'], guideRef: '테스트 전략', estimatedDays: 2 },
+        ],
+      },
+    ],
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // SPRINT 14 — MSA 전환 로드맵
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-14', number: 18,
+    title: 'MSA 전환 로드맵 실행 (Phase 1→2→3)',
+    subtitle: 'MSA Migration Roadmap',
+    description: '3단계 MSA 전환: Phase 1 Modular Monolith 감사 (ArchUnit), Phase 2 WMS/TMS 독립 서비스 분리 (Kubernetes·Resilience4j), Phase 3 Kafka Event-Driven 설계 (Saga 패턴).',
+    status: 'todo', priority: 'low', duration: '지속', phase: '추가과제', category: 'additional',
+    guideSection: '[부록] MSA 전환 로드맵', icon: '🛸',
+    techStack: ['ArchUnit', 'Kubernetes (K8s)', 'Resilience4j Circuit Breaker', 'gRPC', 'Kafka Event Sourcing', 'Saga Pattern'],
+    goal: {
+      summary: '3단계 MSA 전환 로드맵을 원칙에 따라 실행하여 트래픽 급증에 선제 대응할 수 있는 아키텍처를 준비한다',
+      problem: '단일 Modular Monolith: 물류 트래픽 70% 급증 시 전체 확장 필요(비용 낭비). 5대 도메인 간 코드 의존성이 MSA 전환 장벽',
+      objective: 'Phase 1: ArchUnit으로 도메인 격리 검증. Phase 2: WMS·TMS Kubernetes 독립 배포·Resilience4j Circuit Breaker. Phase 3: Kafka 이벤트 주도 아키텍처·Saga 패턴',
+      deliverables: ['ArchUnit 도메인 격리 테스트', '도메인 의존성 현황 보고서', 'WMS·TMS 서비스 분리 아키텍처 설계', 'Kubernetes Deployment·HPA 설정', 'Kafka 이벤트 도메인 모델', 'Saga 패턴 설계 가이드'],
+      dependencies: ['Sprint 5 완료 (멀티모듈)', 'Sprint 10 완료 (Gateway)', 'Sprint 11 완료 (Kafka)'],
+    },
+    ossDetails: [
+      {
+        name: 'Resilience4j (Circuit Breaker)',
+        version: '2.x',
+        role: 'MSA Phase 2 서비스 간 통신 장애 전파 방지 — Circuit Breaker·Retry·TimeLimiter·Bulkhead',
+        why: 'Netflix Hystrix(EOL) 대체. Spring Boot 3.x 공식 지원. 경량(함수형 데코레이터 방식). Actuator 연동으로 상태 모니터링',
+        setupSteps: [
+          '① spring-boot-starter-aop + resilience4j-spring-boot3 의존성',
+          '② application.yml: resilience4j.circuitbreaker.instances.wmsService.slidingWindowSize=10',
+          '③ @CircuitBreaker(name="wmsService", fallbackMethod="wmsServiceFallback") 적용',
+          '④ fallback 메서드: wmsServiceFallback(Exception ex) — 기본값 반환 또는 큐 저장',
+          '⑤ @Retry(name="wmsService", maxAttempts=3) — 재시도 3회 (지수 백오프)',
+          '⑥ Actuator: GET /actuator/circuitbreakers — 상태 모니터링',
+        ],
+        keyConfig: '@CircuitBreaker(name="wmsService", fallbackMethod="fallback") // 장애 시 fallback 자동 호출',
+        pitfalls: ['CircuitBreaker OPEN 상태에서 요청이 fallback으로 바로 전달됨 — fallback 로직 필수', 'Timeout과 CircuitBreaker 함께 사용 시 TimeLimiter 별도 설정 필요'],
+        references: ['부록 Phase 2 개발자 준수사항 — Circuit Breaker'],
+      },
+      {
+        name: 'Kubernetes (K8s)',
+        version: '1.30.x',
+        role: 'MSA Phase 2 컨테이너 오케스트레이션 — Deployment·HPA·Service·Ingress 관리',
+        why: 'Docker Compose는 단일 호스트 한계. K8s: 다중 노드·자동 스케일아웃·롤링 업데이트·자가 치유(self-healing)',
+        setupSteps: [
+          '① WMS·TMS Deployment YAML: replicas: 2, image: nexus.jette.com/fass-wms:latest',
+          '② HPA: minReplicas: 2, maxReplicas: 10, targetCPUUtilizationPercentage: 70',
+          '③ Service (ClusterIP): WMS 내부 서비스 디스커버리',
+          '④ Ingress: Nginx Ingress Controller → /wms/** 라우팅',
+          '⑤ ConfigMap·Secret: 환경변수 분리 (Vault와 External Secrets Operator 연동)',
+          '⑥ 롤링 업데이트: strategy: RollingUpdate, maxUnavailable: 1, maxSurge: 1',
+        ],
+        keyConfig: 'resources: requests: { cpu: 500m, memory: 512Mi }, limits: { cpu: 2, memory: 2Gi }',
+        pitfalls: ['HPA + JVM 기반 서비스: JVM 워밍업 시간 고려 → readinessProbe 충분한 initialDelaySeconds 설정', 'PVC(영구 볼륨) 없이 Pod 재시작 시 데이터 손실'],
+        references: ['부록 Phase 2 인프라 구성 — Containerization·Kubernetes'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us14-1', asA: '아키텍트', iWantTo: '현재 Modular Monolith에서 도메인 간 직접 참조를 ArchUnit으로 자동 감지하고 싶다',
+        soThat: 'MSA 분리 전 결합도를 데이터 기반으로 파악하고 리팩토링 우선순위를 결정할 수 있다',
+        asBefore: '5대 도메인이 서로 클래스 직접 import. MSA 분리 시 순환 의존성으로 빌드 실패',
+        toBe: 'ArchUnit CI 테스트로 cross-domain 참조 감지·빌드 차단. 도메인 의존성 그래프 자동 생성',
+        priority: 'medium', status: 'todo', storyPoints: 8,
+        acceptanceCriteria: ['com.jette.distribution → com.jette.logistics 직접 참조 감지 시 빌드 실패', '도메인 의존성 현황 리포트 자동 생성', '공통 모듈(fass-core) 참조는 허용'],
+        tasks: [
+          { id: 't14-1-1', title: 'ArchUnit 도메인 격리 규칙 + CI 통합', description: '레이어·도메인 간 의존성 규칙 ArchUnit 테스트, Jenkins CI 통합, 현황 보고서', priority: 'medium', status: 'todo', assigneeRole: '아키텍트', techStack: ['ArchUnit', 'JUnit 5'], guideRef: '부록 Phase 1', estimatedDays: 2 },
+          { id: 't14-1-2', title: 'WMS·TMS Kubernetes 배포 설계 + Resilience4j', description: 'Deployment·HPA·Service YAML, Circuit Breaker·Retry 설정, 롤링 업데이트', priority: 'low', status: 'todo', assigneeRole: '인프라+아키텍트', techStack: ['K8s', 'Resilience4j'], guideRef: '부록 Phase 2', estimatedDays: 3 },
+          { id: 't14-1-3', title: 'Kafka Event-Driven 이벤트 모델 + Saga 패턴 설계', description: '발주확정→입고예정→배차 이벤트 흐름, Saga 보상 트랜잭션, Choreography vs Orchestration 선택', priority: 'low', status: 'todo', assigneeRole: '아키텍트', techStack: ['Kafka', 'Saga Pattern'], guideRef: '부록 Phase 3', estimatedDays: 3 },
+        ],
+      },
+    ],
+    assignees: [기충영],
+  },
+
+  // SPRINT 20 — 표준 라이브러리 골든셋 (Golden Set)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-18', number: 19,
+    title: '표준 라이브러리 골든셋 (Golden Set)',
+    subtitle: 'Approved Library Package Standard',
+    description: 'FaSS Platform 전 모듈에서 사용할 승인된 표준 라이브러리 목록(골든셋)을 확정하고, Gradle BOM·Nexus 승인 저장소·자동 버전 감사 파이프라인을 구축하여 의존성 일관성과 보안을 확보합니다.',
+    status: 'todo', priority: 'high', duration: '2주', phase: '추가과제', category: 'additional',
+    guideSection: '6.2절·보안 정책·OSS 관리', icon: '📦',
+    techStack: ['Gradle BOM', 'Nexus Repository', 'OWASP Dependency-Check', 'Dependabot', 'Spring Boot 3.x', 'fass-bom', 'Jenkins CI'],
+    assignees: [심지훈, 이지상, 김희찬, 오준열],
+    goal: {
+      summary: '전 모듈이 동일한 승인 버전의 라이브러리만 사용하도록 fass-bom을 중앙화하고, 미승인·취약 라이브러리를 CI에서 자동 차단한다',
+      problem: '모듈마다 동일 라이브러리의 다른 버전 사용 → 런타임 클래스 충돌. 보안 취약점(CVE)이 있는 구버전 라이브러리를 인지 없이 사용. 신규 팀원이 임의로 미검증 라이브러리를 추가해도 검토 프로세스 없음. 사내 Nexus 없이 Maven Central 직접 의존 → 인터넷 단절 시 빌드 불가',
+      objective: '① fass-bom 모듈: 전 모듈 공통 의존성 버전 중앙화(Spring Boot 3.3.x, Lombok 1.18.x 등 명세). ② Nexus 승인 저장소: 골든셋 라이브러리만 캐시·프록시. ③ OWASP Dependency-Check CI 통합: CVE 점수 7.0↑ 빌드 자동 실패. ④ 라이브러리 추가 프로세스: PL 승인 MR → 골든셋 등록 → fass-bom 업데이트',
+      deliverables: [
+        'fass-bom/build.gradle.kts — 전 모듈 공통 의존성 버전 BOM',
+        '골든셋 목록 문서 (라이브러리명·버전·승인일·담당자·CVE 점수)',
+        'Nexus Repository 승인 그룹 설정 (proxy/hosted 분리)',
+        'OWASP Dependency-Check Jenkins 파이프라인 (CVE 7.0↑ 차단)',
+        '라이브러리 추가 프로세스 가이드 (신청 → PL 검토 → BOM 등록)',
+        'Dependabot / Renovate 자동 버전 업데이트 PR 설정',
+        '미승인 라이브러리 사용 시 빌드 경고 Gradle 플러그인',
+      ],
+      dependencies: ['Sprint 1 완료 (Nexus Docker)', 'Sprint 5 완료 (Gradle 멀티모듈)'],
+    },
+    ossDetails: [
+      {
+        name: 'fass-bom (Gradle BOM — Bill of Materials)',
+        version: 'Gradle 8.x + Kotlin DSL',
+        role: 'FaSS 전 모듈이 참조하는 단일 의존성 버전 명세서 — 모듈별 버전 선언 불필요, BOM 업데이트 한 번으로 전체 반영',
+        why: '멀티모듈 프로젝트에서 모듈별 버전 관리는 충돌·누락 위험. Spring Boot BOM처럼 fass-bom이 버전 권위를 가지면 일관성 보장. 보안 취약 버전 발견 시 BOM 한 곳만 수정',
+        setupSteps: [
+          '① fass-bom 모듈 생성: settings.gradle.kts에 include("fass-bom") 추가',
+          '② fass-bom/build.gradle.kts: java-platform 플러그인 적용 → dependencies { constraints { … } }',
+          '③ 골든셋 라이브러리 버전 명세: spring-boot 3.3.5, lombok 1.18.34, mapstruct 1.6.2, jackson 2.17.2 등',
+          '④ 각 서브모듈 build.gradle.kts: implementation(platform(project(":fass-bom"))) → 버전 생략',
+          '⑤ enforcedPlatform() 대신 platform() 사용 — 하위 모듈이 특정 상황에서 버전 오버라이드 허용',
+          '⑥ CI: BOM 변경 시 전 모듈 의존성 트리 출력 → 충돌 검사 스크립트 실행',
+        ],
+        keyConfig: '// fass-bom/build.gradle.kts\nplugins { `java-platform` }\ndependencies { constraints {\n  api("org.springframework.boot:spring-boot-starter:3.3.5")\n  api("org.projectlombok:lombok:1.18.34")\n  api("org.mapstruct:mapstruct:1.6.2")\n} }',
+        pitfalls: [
+          'enforcedPlatform()은 하위 모듈 오버라이드를 막으므로 예외 대응 불가 — platform() 권장',
+          'BOM 순환 의존성 주의: fass-bom이 fass-core를 참조하거나 역참조 금지',
+          'Spring Boot Plugin의 자체 BOM과 충돌 가능 — spring-boot-dependencies를 fass-bom이 import하여 일원화',
+        ],
+        references: ['6.2절 Gradle 멀티모듈 설정', 'Gradle Platform 공식 문서'],
+      },
+      {
+        name: 'OWASP Dependency-Check (CVE 자동 감사)',
+        version: '10.x',
+        role: 'Gradle 빌드 및 Jenkins CI에서 의존성 전체를 NVD(National Vulnerability Database) CVE DB와 대조 — 취약 라이브러리 자동 탐지·빌드 차단',
+        why: 'Log4Shell(CVE-2021-44228) 사례처럼 신뢰받는 라이브러리도 치명적 CVE 발생. 수동 검토는 누락 위험. CI 자동 차단으로 취약 버전 배포 원천 방지. ISMS-P 인증 요구사항(보안 취약점 관리) 충족',
+        setupSteps: [
+          '① fass-bom/build.gradle.kts: id("org.owasp.dependencycheck") version "10.0.4" 플러그인 추가',
+          '② dependencyCheck { failBuildOnCVSS = 7.0f; format = "ALL"; suppressionFile = "suppression.xml" }',
+          '③ NVD API Key 발급 (api.nvd.nist.gov) → Vault/Jenkins Credentials에 저장',
+          '④ Jenkins Pipeline: stage("Security Scan") { sh "./gradlew dependencyCheckAggregate" }',
+          '⑤ suppression.xml: 오탐(False Positive) 라이브러리 예외 처리 (PL 승인 필수)',
+          '⑥ 결과 리포트: build/reports/dependency-check-report.html → Jenkins Artifacts 게시',
+          '⑦ 주간 스케줄: NVD DB 최신화 + 전 모듈 재검사 (새 CVE 탐지)',
+        ],
+        keyConfig: 'dependencyCheck { failBuildOnCVSS = 7.0f\nautoUpdate = true\nnvd.apiKey = System.getenv("NVD_API_KEY")\nformat = listOf("HTML", "JSON") }',
+        pitfalls: [
+          'NVD API Rate Limit: 무료 키 없이 요청 시 429 오류로 빌드 지연 (최대 30초/요청) — API Key 필수',
+          'False Positive 많음 초기에 — suppression.xml 관리 규칙 수립 (PL 승인 후 추가)',
+          'CI 최초 실행 시 NVD DB 다운로드 5~10분 소요 — Jenkins 캐시 볼륨 설정 필수',
+        ],
+        references: ['OWASP Dependency-Check 공식 문서', 'ISMS-P 취약점 관리 항목'],
+      },
+      {
+        name: 'Nexus Repository Manager (승인 라이브러리 저장소)',
+        version: 'Nexus 3.x (OSS)',
+        role: '골든셋 라이브러리만 캐시하는 사내 Maven/npm 저장소 — 인터넷 단절 시에도 빌드 가능, 미승인 라이브러리 다운로드 차단',
+        why: '인터넷 직접 의존 시 Maven Central 장애·망 분리 환경에서 빌드 불가. Nexus proxy 저장소가 승인된 그룹만 노출하면 미승인 라이브러리는 404 반환 → 자동 차단. 빌드 캐시로 빌드 속도 향상',
+        setupSteps: [
+          '① Nexus Docker: sonatype/nexus3 컨테이너, 데이터 볼륨 마운트',
+          '② Proxy 저장소: maven-central-proxy (Maven Central 미러), npmjs-proxy',
+          '③ Hosted 저장소: fass-releases, fass-snapshots (사내 발행 라이브러리)',
+          '④ Group 저장소: fass-all (proxy + hosted 묶음) — 개발자는 이 URL만 사용',
+          '⑤ 골든셋 허용 정책: Nexus Content Selector로 승인 그룹 ID만 노출',
+          '⑥ Gradle settings.gradle.kts: repositories { maven { url = uri("http://nexus/repository/fass-all") }; mavenLocal() } — Maven Central 직접 참조 제거',
+          '⑦ 미승인 그룹 접근 시 403 반환 → 개발자가 PL에 추가 신청',
+        ],
+        keyConfig: '// settings.gradle.kts\ndependencyResolutionManagement {\n  repositories {\n    maven { url = uri("http://nexus.jette.com/repository/fass-all")\n    credentials { username = "..."; password = "..." } }\n  }\n}',
+        pitfalls: [
+          'Nexus 초기 구성 시 Maven Central 차단 전 전체 팀 Nexus 전환 완료 확인 필수',
+          'SNAPSHOT 버전: Nexus hosted에 배포 후 팀 공유 — 로컬 mavenLocal() 의존 금지(팀 환경 불일치)',
+          'Nexus 장애 시 전체 빌드 불가 — HA 구성 또는 fallback Maven Central 예외 정책 필요',
+        ],
+        references: ['Sprint 1 — Nexus Docker 설정', '6.2절 의존성 관리'],
+      },
+      {
+        name: 'Renovate / Dependabot (자동 버전 업데이트 PR)',
+        version: 'Renovate OSS / GitHub Dependabot',
+        role: 'fass-bom의 라이브러리 신규 버전 감지 → GitLab MR 자동 생성 → PL 검토 후 BOM 업데이트',
+        why: '수동 버전 모니터링은 최신 보안 패치 누락 위험. Renovate가 신버전 감지 → MR 자동 생성 → OWASP CI 검사 통과 시 PL 승인만으로 업데이트. 골든셋 유지 비용 최소화',
+        setupSteps: [
+          '① GitLab에 Renovate Self-hosted 컨테이너 배포 또는 Renovate Bot 설치',
+          '② renovate.json: { "extends": ["config:base"], "packageRules": [{"matchPackagePatterns": ["*"], "groupName": "fass-bom updates"}] }',
+          '③ MR 생성 시 Jenkins CI 자동 트리거 → OWASP 검사 → 테스트 통과 시 MR에 ✅ 표시',
+          '④ 업데이트 정책: minor/patch 자동 MR, major는 별도 이슈 생성',
+          '⑤ PL이 MR 검토 → 승인 → fass-bom 업데이트 → 전 모듈 자동 반영',
+        ],
+        keyConfig: '{ "schedule": ["every weekend"], "prCreation": "not-pending", "automerge": false, "reviewers": ["기충영"] }',
+        pitfalls: [
+          'automerge 활성화 금지 — PL 검토 없는 자동 병합은 골든셋 원칙 위반',
+          'Major 버전 업데이트(예: Spring Boot 3→4)는 마이그레이션 스프린트 별도 계획 필요',
+        ],
+        references: ['OSS 관리 가이드', 'GitLab CI — 자동화 정책'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us18-1',
+        asA: '백엔드 개발자',
+        iWantTo: 'build.gradle.kts에 버전 없이 라이브러리 이름만 선언해도 팀 전체와 동일한 버전을 자동으로 사용하고 싶다',
+        soThat: '버전 충돌로 인한 런타임 오류 없이, 골든셋 기준의 검증된 라이브러리만 사용하여 안정적으로 개발할 수 있다',
+        asBefore: '모듈마다 spring-boot:3.2.1, spring-boot:3.3.0, spring-boot:3.1.9 혼용. 빌드는 되지만 런타임 ClassCastException 발생. 신규 입사자가 임의로 guava:31.0 추가',
+        toBe: 'implementation("org.springframework.boot:spring-boot-starter") // 버전 없음 → fass-bom에서 3.3.5 자동 적용. 미선언 라이브러리 추가 시 CI에서 경고 발생',
+        priority: 'high',
+        status: 'todo',
+        storyPoints: 8,
+        acceptanceCriteria: [
+          'fass-core/biz/api/batch 4개 모듈에서 버전 선언 없이 Spring Boot 의존성 사용 가능',
+          'fass-bom 버전 변경 시 전 모듈 자동 반영 (재선언 불필요)',
+          './gradlew dependencies 출력에서 버전 충돌(conflict) 0건',
+          '골든셋 외 라이브러리 추가 시 Jenkins CI 경고 로그 출력',
+        ],
+        tasks: [
+          {
+            id: 't18-1-1',
+            title: 'fass-bom 모듈 생성 + 골든셋 초기 버전 명세',
+            description: 'java-platform 플러그인, Spring Boot 3.3.5 / Lombok 1.18.34 / MapStruct 1.6.2 / Jackson 2.17.2 / QueryDSL 5.1.0 / Flyway 10.x / Kafka 3.7.x 등 전체 골든셋 버전 constraints 선언',
+            priority: 'high', status: 'todo', assigneeRole: '백엔드·PL',
+            techStack: ['Gradle BOM', 'Kotlin DSL'],
+            guideRef: '6.2절 멀티모듈',
+            estimatedDays: 2,
+            subTasks: [
+              { id: 'st18-1-1-1', title: 'fass-bom 모듈 디렉토리 + java-platform 설정', status: 'todo' },
+              { id: 'st18-1-1-2', title: '백엔드 골든셋 라이브러리 버전 명세 (Spring Boot 생태계)', status: 'todo' },
+              { id: 'st18-1-1-3', title: '프론트엔드 npm 골든셋 package.json 표준 (Next.js 14, React 18 등)', status: 'todo' },
+              { id: 'st18-1-1-4', title: '4개 서브모듈 build.gradle.kts 버전 제거 + BOM 참조로 전환', status: 'todo' },
+            ],
+          },
+          {
+            id: 't18-1-2',
+            title: '골든셋 목록 문서 작성 + 승인 프로세스 정의',
+            description: '라이브러리명·버전·용도·승인일·CVE 점수·담당자 표로 정리. 신규 라이브러리 추가 프로세스: 신청 이슈 → PL 검토(3일) → OWASP 검사 → BOM 등록',
+            priority: 'high', status: 'todo', assigneeRole: 'PL',
+            techStack: ['GitLab Wiki', 'Markdown'],
+            guideRef: 'OSS 관리 정책',
+            estimatedDays: 1,
+          },
+          {
+            id: 't18-1-3',
+            title: 'Nexus 승인 저장소 그룹 구성 + Maven Central 차단',
+            description: 'fass-all 그룹에 골든셋 그룹 ID만 포함. Gradle settings.gradle.kts repositories를 Nexus 단독으로 전환. 팀 전체 Nexus 전환 완료 후 Maven Central 직접 참조 제거',
+            priority: 'high', status: 'todo', assigneeRole: '인프라',
+            techStack: ['Nexus 3.x', 'Gradle'],
+            guideRef: 'Sprint 1 — Nexus 설정',
+            estimatedDays: 2,
+          },
+        ],
+      },
+      {
+        id: 'us18-2',
+        asA: '보안 담당자',
+        iWantTo: 'Jenkins CI가 빌드 시 CVE 점수 7.0 이상 취약 라이브러리를 자동으로 감지하고 배포를 차단하길 바란다',
+        soThat: 'Log4Shell 같은 치명적 취약점이 있는 라이브러리가 운영 서버에 배포되는 것을 자동으로 방지할 수 있다',
+        asBefore: '보안 취약 라이브러리 사용 여부를 수동 검토. Log4j 2.14 사용 중 Log4Shell CVE 발견 시 수동으로 전 모듈 확인. ISMS-P 감사 시 취약점 관리 증빙 부재',
+        toBe: 'Jenkins 매 빌드마다 OWASP Dependency-Check 자동 실행 → CVE 7.0↑ 발견 시 빌드 실패 + Slack 알림 + 취약 라이브러리 목록 리포트 게시',
+        priority: 'high',
+        status: 'todo',
+        storyPoints: 8,
+        acceptanceCriteria: [
+          'CVE 점수 7.0↑ 라이브러리 존재 시 Jenkins 빌드 FAILED 처리',
+          'HTML 취약점 리포트 Jenkins Artifacts에 자동 게시',
+          'CVE 발견 시 Slack/Mattermost에 라이브러리명·CVE 번호·점수 알림',
+          '주간 스케줄 스캔: 신규 CVE 발견 시 이슈 자동 등록',
+          'suppression.xml 변경은 PL 승인 MR 필수',
+        ],
+        tasks: [
+          {
+            id: 't18-2-1',
+            title: 'OWASP Dependency-Check Gradle 플러그인 설정',
+            description: 'fass-bom에 owasp dependency-check 플러그인 추가. failBuildOnCVSS=7.0, NVD API Key Vault 주입, suppression.xml 초기 구성',
+            priority: 'high', status: 'todo', assigneeRole: '백엔드·보안',
+            techStack: ['OWASP', 'Gradle', 'Vault'],
+            guideRef: '보안 정책 — 취약점 관리',
+            estimatedDays: 2,
+            subTasks: [
+              { id: 'st18-2-1-1', title: 'OWASP 플러그인 추가 + NVD API Key 설정', status: 'todo' },
+              { id: 'st18-2-1-2', title: 'Jenkins Credentials에 NVD_API_KEY 등록', status: 'todo' },
+              { id: 'st18-2-1-3', title: 'suppression.xml 초기 오탐 예외 처리', status: 'todo' },
+            ],
+          },
+          {
+            id: 't18-2-2',
+            title: 'Jenkins Pipeline 보안 스캔 스테이지 추가',
+            description: 'Jenkinsfile stage("Security Scan"): dependencyCheckAggregate 실행, HTML 리포트 archiveArtifacts, CVE 발견 시 Mattermost 알림 스크립트',
+            priority: 'high', status: 'todo', assigneeRole: '인프라',
+            techStack: ['Jenkins', 'Groovy', 'Mattermost'],
+            guideRef: '15.2절 Jenkins CI/CD',
+            estimatedDays: 2,
+          },
+          {
+            id: 't18-2-3',
+            title: 'Renovate 자동 버전 업데이트 MR 설정',
+            description: 'GitLab Renovate Bot 설치, renovate.json 구성, minor/patch 자동 MR + OWASP CI 트리거, PL 리뷰어 자동 지정',
+            priority: 'medium', status: 'todo', assigneeRole: 'PL',
+            techStack: ['Renovate', 'GitLab CI'],
+            guideRef: 'OSS 관리 — 자동화',
+            estimatedDays: 1,
+          },
+        ],
+      },
+      {
+        id: 'us18-3',
+        asA: '프론트엔드 개발자',
+        iWantTo: 'Next.js·React·Tailwind 등 프론트엔드 패키지도 팀 표준 버전으로 통일된 package.json 템플릿을 사용하고 싶다',
+        soThat: '라이브러리 버전 차이로 인한 UI 동작 불일치 없이 동일한 개발 환경을 공유할 수 있다',
+        asBefore: '개발자마다 next@14.1, next@14.2, next@14.0 혼용. shadcn/ui 컴포넌트 버전 불일치로 스타일 깨짐. 신규 라이브러리 추가 시 팀 공유 없이 개인 package.json 수정',
+        toBe: 'fass-frontend-golden-set/package.json 표준 템플릿 배포. npm audit으로 취약 패키지 CI 차단. 신규 패키지 추가 시 PL MR 승인 필수',
+        priority: 'medium',
+        status: 'todo',
+        storyPoints: 5,
+        acceptanceCriteria: [
+          '표준 package.json 템플릿 GitLab 공개 저장소 배포',
+          'npm audit --audit-level=high 실패 시 Jenkins 빌드 차단',
+          'Next.js·React·Tailwind·shadcn/ui·zustand·tanstack-query 버전 표준화',
+          '신규 패키지 추가 가이드 문서 Wiki 게시',
+        ],
+        tasks: [
+          {
+            id: 't18-3-1',
+            title: '프론트엔드 골든셋 package.json 표준 템플릿 작성',
+            description: 'Next.js 14.2.x, React 18.3.x, TypeScript 5.4.x, Tailwind 3.4.x, shadcn/ui 최신, Zustand 4.x, TanStack Query 5.x, Axios 1.7.x 버전 고정',
+            priority: 'medium', status: 'todo', assigneeRole: '프론트·PL',
+            techStack: ['Next.js', 'npm', 'package.json'],
+            guideRef: '7장 Next.js 표준 디렉토리',
+            estimatedDays: 1,
+          },
+          {
+            id: 't18-3-2',
+            title: 'npm audit Jenkins CI 통합 + 취약 패키지 차단',
+            description: 'Jenkins Pipeline: npm audit --audit-level=high 실행, HIGH/CRITICAL 취약점 발견 시 빌드 실패, npm outdated 리포트 주간 게시',
+            priority: 'medium', status: 'todo', assigneeRole: '인프라',
+            techStack: ['Jenkins', 'npm audit'],
+            guideRef: '15.2절 CI/CD',
+            estimatedDays: 1,
+          },
+        ],
+      },
+    ],
+  },
+
+  // SPRINT 20 — SCA 도입 (Nexus IQ + Sonatype — 오픈소스 공급망 보안)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-19', number: 20,
+    title: 'SCA 도입 (Nexus IQ — 오픈소스 공급망 보안)',
+    subtitle: 'Software Composition Analysis with Nexus',
+    description: 'Nexus Repository와 연동된 Nexus IQ Server(SCA)를 도입하여 오픈소스 라이브러리의 라이선스 위반·CVE 취약점·공급망 위협을 CI 파이프라인에서 자동으로 탐지하고 정책 기반으로 차단합니다.',
+    status: 'todo', priority: 'high', duration: '2주', phase: '추가과제', category: 'additional',
+    guideSection: 'OSS 관리·보안 정책·6.2절', icon: '🔬',
+    techStack: ['Nexus IQ Server', 'Nexus Repository', 'Sonatype', 'OWASP Dependency-Check', 'Jenkins CI', 'Gradle', 'npm audit', 'CycloneDX SBOM'],
+    assignees: [기충영, 송민준],
+    goal: {
+      summary: 'Nexus IQ SCA로 오픈소스 CVE·라이선스 위반·공급망 위협을 CI 단계에서 자동 차단하여 골든셋 보안을 한 단계 강화한다',
+      problem: 'OWASP Dependency-Check는 NVD 대조 기반으로 신규 CVE 반영이 느리고 오탐이 많음. 라이선스 검토 자동화 없어 GPL 라이선스 오염 위험. Nexus 저장소에 업로드된 컴포넌트의 보안 검증 체계 없음. SBOM(소프트웨어 부품 명세서) 미생성으로 공급망 감사 불가',
+      objective: '① Nexus IQ Server: Nexus Repository 연동 → 업로드/다운로드 시점에 SCA 자동 실행. ② Policy 설정: CVE Critical 즉시 차단, High 경고, GPL-3.0 라이선스 차단. ③ Jenkins CI 통합: PR 단계 SCA 스캔 → 위반 시 MR 차단. ④ CycloneDX SBOM 자동 생성: 매 릴리즈마다 부품 명세서 아티팩트 생성',
+      deliverables: [
+        'Nexus IQ Server Docker 배포 + Nexus Repository 연동 설정',
+        'SCA 정책 정의서 (CVE Critical 차단 / High 경고 / 라이선스 Deny 목록)',
+        'Jenkins Pipeline SCA 스캔 스테이지 (Gradle + npm 동시 스캔)',
+        'CycloneDX SBOM 자동 생성 Gradle 플러그인 설정',
+        'Nexus Firewall: 저장소 업로드 시 자동 컴포넌트 검증',
+        'SCA 대시보드 연동 (Nexus IQ Web UI — 컴포넌트별 리스크 현황)',
+        '라이선스 허용/차단 목록 문서 (Apache-2.0 ✅ / GPL-3.0 ❌ / LGPL-2.1 ⚠️)',
+      ],
+      dependencies: ['Sprint 1 완료 (Nexus Docker)', 'Sprint 19 완료 (골든셋 BOM)', 'Sprint 15.2절 Jenkins CI/CD'],
+    },
+    ossDetails: [
+      {
+        name: 'Nexus IQ Server (Sonatype SCA)',
+        version: 'Nexus IQ 170.x (Docker)',
+        role: '오픈소스 컴포넌트별 CVE·라이선스·공급망 위협을 실시간 분석하고, Nexus Repository Firewall과 연동하여 위험 컴포넌트의 저장소 진입을 차단',
+        why: 'OWASP Dependency-Check 대비 장점: ① Sonatype 독자 취약점 DB(NVD+OSS Index 복합) — 신규 CVE 평균 3일 빠른 반영. ② 오탐률 낮음 (컴포넌트 지문 기반). ③ 라이선스 분석 내장. ④ Nexus Repository Firewall 직접 연동 — 업로드 시점 차단. ⑤ SBOM 자동 생성',
+        setupSteps: [
+          '① Docker Compose: sonatype/nexus-iq-server:1.170 (포트 8070/8071)',
+          '② Nexus IQ Admin Console: Organization 구성 (jette-platform), Application 등록 (fass-api, fass-frontend)',
+          '③ Nexus Repository 연동: IQ Server URL 설정 → Repository Firewall 활성화',
+          '④ Gradle 플러그인: id("org.sonatype.gradle.plugins.scan") version "2.8.1"',
+          '⑤ Jenkins Credentials: NEXUS_IQ_URL, NEXUS_IQ_USERNAME, NEXUS_IQ_PASSWORD 등록',
+          '⑥ nexusScan { serverUrl = System.getenv("NEXUS_IQ_URL"); username = "..."; applicationId = "fass-api"; stage = "build" }',
+          '⑦ 정책 설정: Security-Critical → fail, Security-High → warn, License-GPL3 → fail',
+        ],
+        keyConfig: '// build.gradle.kts\nnexusScan {\n  serverUrl = System.getenv("NEXUS_IQ_URL")\n  username = System.getenv("NEXUS_IQ_USER")\n  password = System.getenv("NEXUS_IQ_PASS")\n  applicationId = "fass-api"\n  stage = "build" // build / stage-release / release\n}',
+        pitfalls: [
+          'Nexus IQ는 Nexus Repository와 별도 서버 — 포트 충돌 주의 (IQ: 8070, Repository: 8081)',
+          '최초 스캔 시 Sonatype 클라우드 DB 동기화 10~20분 소요 — Jenkins 타임아웃 설정 필수',
+          'stage = "release" 설정 시 운영 배포 차단 가능 — 초기엔 "build" 스테이지로 경고만 적용',
+          '프록시 환경(망 분리)에서 Sonatype Data Services 접근 불가 시 오프라인 DB 업데이트 설정 필요',
+        ],
+        references: ['Sonatype Nexus IQ 공식 문서', 'OSS 관리 정책', '6.2절 의존성 관리'],
+      },
+      {
+        name: 'Nexus Repository Firewall (SCA 연동 컴포넌트 차단)',
+        version: 'Nexus Repository 3.x OSS + IQ 연동',
+        role: 'Nexus proxy 저장소에서 외부 라이브러리 다운로드 시 IQ SCA 정책을 실시간 적용 — 취약·라이선스 위반 컴포넌트를 저장소 레벨에서 차단',
+        why: 'CI 스캔만으로는 이미 로컬 캐시에 내려받은 컴포넌트 차단 불가. Firewall이 Nexus proxy에서 IQ 정책 위반 컴포넌트를 404로 차단하면 다운로드 자체가 불가능 → 더 강력한 공급망 보호',
+        setupSteps: [
+          '① Nexus Repository Admin → IQ Server 설정 → Nexus IQ URL + 인증 정보 연결',
+          '② Repository 설정 → IQ: Quarantine 활성화 (proxy 저장소별)',
+          '③ IQ Policy: Quarantine 정책 — Security-Critical: quarantine, License-Denied: quarantine',
+          '④ 격리(Quarantine)된 컴포넌트: Nexus에서 503 반환 → 개발자에게 IQ 리포트 URL 안내',
+          '⑤ 예외 처리: IQ Web UI에서 PL 승인 후 컴포넌트 Waiver(면제) 등록',
+          '⑥ 주간 Firewall 리포트: 차단된 컴포넌트 목록 → 팀 Mattermost 채널 알림',
+        ],
+        keyConfig: 'Nexus UI: Administration → IQ Server → Enable → URL: http://nexus-iq:8070\nRepository Firewall: Enabled per-repository (maven-central-proxy, npmjs-proxy)',
+        pitfalls: [
+          'Quarantine 활성화 직후 기존 캐시 컴포넌트는 소급 재검사 — 운영 빌드 영향 없도록 업무 시간 외 활성화',
+          'Firewall이 IQ Server 연결 불가 시 차단 기본값(Fail-Open vs Fail-Closed) 정책 결정 필수',
+          'npm proxy 저장소도 Firewall 적용 가능 — 프론트엔드 패키지 포함 전체 공급망 커버',
+        ],
+        references: ['Nexus Repository Firewall 공식 문서', 'Sprint 19 골든셋 — Nexus 승인 저장소'],
+      },
+      {
+        name: 'CycloneDX SBOM (소프트웨어 부품 명세서)',
+        version: 'cyclonedx-gradle-plugin 1.8.x / cyclonedx-npm 1.x',
+        role: '매 릴리즈마다 프로젝트에 포함된 모든 오픈소스 컴포넌트 목록(이름·버전·라이선스·CVE)을 JSON/XML로 자동 생성 — 공급망 감사·ISMS-P 증빙 활용',
+        why: 'Log4Shell 사태 이후 SBOM 제출이 미국 정부 조달 요건(EO 14028)으로 의무화. ISMS-P 2024 개정에서 소프트웨어 공급망 관리 항목 추가. 취약점 발견 시 어떤 버전이 배포됐는지 즉시 파악 가능',
+        setupSteps: [
+          '① Gradle: id("org.cyclonedx.bom") version "1.8.2" 플러그인 추가',
+          '② cyclonedxBom { includeConfigs = ["runtimeClasspath"]; schemaVersion = "1.5"; destination = file("build/reports") }',
+          '③ npm: npm install --save-dev @cyclonedx/cyclonedx-npm',
+          '④ package.json scripts: "sbom": "cyclonedx-npm --output-file bom.json"',
+          '⑤ Jenkins Pipeline release 스테이지: ./gradlew cyclonedxBom → bom.json archiveArtifacts',
+          '⑥ Nexus IQ 연동: SBOM 파일 IQ Server로 제출 → 컴포넌트 리스크 분석 리포트 생성',
+          '⑦ GitLab 릴리즈 태그: bom.json을 릴리즈 아티팩트에 첨부',
+        ],
+        keyConfig: '// build.gradle.kts\ncyclonedxBom {\n  includeConfigs.set(listOf("runtimeClasspath"))\n  schemaVersion.set("1.5")\n  destination.set(file("build/reports/sbom"))\n  outputName.set("fass-api-bom")\n  outputFormat.set("json")\n}',
+        pitfalls: [
+          'SBOM에 내부 proprietary 코드 정보 포함 주의 — outputFormat 범위를 runtimeClasspath(배포 의존성)만으로 제한',
+          'SBOM 파일 크기: 대규모 프로젝트는 수 MB → GitLab 릴리즈 아티팩트 용량 제한 확인',
+          'cyclonedxBom과 dependencyCheck 동시 사용 시 Gradle task 순서 지정 필요',
+        ],
+        references: ['CycloneDX 공식 스펙', 'NTIA SBOM 가이드', 'ISMS-P 공급망 관리'],
+      },
+      {
+        name: 'Sonatype OSS Index (무료 SCA API)',
+        version: 'OSS Index REST API v3',
+        role: 'Nexus IQ 없이도 사용 가능한 Sonatype 무료 취약점 DB API — OWASP Dependency-Check의 Analyzer로 통합하여 NVD 대비 더 빠른 CVE 반영',
+        why: 'NVD API는 주기적 동기화 지연 발생. OSS Index는 Maven·npm 패키지 좌표(GroupId:ArtifactId:Version)로 즉시 취약점 조회 가능. OWASP Dependency-Check와 함께 사용하면 탐지율 향상',
+        setupSteps: [
+          '① OSS Index 계정 생성 (ossindex.sonatype.org) → API Token 발급',
+          '② OWASP Dependency-Check 설정에 ossIndexAnalyzerEnabled=true 추가',
+          '③ ossIndex.username + ossIndex.apiToken Vault에서 주입',
+          '④ Gradle: dependencyCheck { analyzers { ossIndex { enabled = true; username = "..."; apiToken = "..." } } }',
+          '⑤ CI: NVD + OSS Index 이중 분석 → 탐지율 향상 + 오탐 교차 검증',
+        ],
+        keyConfig: 'dependencyCheck {\n  analyzers {\n    ossIndex { enabled.set(true)\n      username.set(System.getenv("OSS_INDEX_USER"))\n      apiToken.set(System.getenv("OSS_INDEX_TOKEN")) }\n  }\n}',
+        pitfalls: [
+          'OSS Index 무료 티어: 분당 128 요청 제한 — 대규모 의존성 스캔 시 Rate Limit 오류 가능',
+          'Nexus IQ 도입 후에는 OSS Index 직접 호출 불필요 (IQ가 이미 통합) — 중복 스캔 방지',
+        ],
+        references: ['Sonatype OSS Index 공식 문서', 'OWASP Dependency-Check Analyzers'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us19-1',
+        asA: '보안 담당자',
+        iWantTo: 'Nexus Repository에 라이브러리가 업로드·다운로드될 때 SCA 정책이 자동으로 적용되어 취약 컴포넌트가 저장소 레벨에서 차단되길 바란다',
+        soThat: 'CI 스캔을 우회하거나 캐시된 취약 컴포넌트도 차단되어, FaSS 공급망 전체를 커버하는 계층형 보안을 확보할 수 있다',
+        asBefore: 'CI에서 OWASP 스캔은 하지만, 이미 Nexus 캐시에 내려받은 취약 라이브러리는 차단 안 됨. 개발자가 CI 스캔을 suppress하고 빌드 강행 가능. Log4j 2.14 같은 케이스에서 배포 후 발견',
+        toBe: 'Nexus IQ Firewall → maven-central-proxy에서 Critical CVE 컴포넌트 요청 시 503 반환. 개발자 화면에 "이 컴포넌트는 CVE-XXXX 로 인해 차단되었습니다" 안내. PL 승인 Waiver 없이는 사용 불가',
+        priority: 'high',
+        status: 'todo',
+        storyPoints: 13,
+        acceptanceCriteria: [
+          'Critical CVE 컴포넌트 Gradle 빌드 시 503/차단 오류 발생',
+          'Nexus IQ Web UI에서 차단 사유(CVE ID·점수) 확인 가능',
+          'PL이 IQ Web UI에서 Waiver 등록 후 해당 컴포넌트 다운로드 허용',
+          '차단 이벤트 Mattermost 알림 (컴포넌트명·CVE·요청자)',
+          'npm proxy 저장소도 동일 Firewall 정책 적용',
+        ],
+        tasks: [
+          {
+            id: 't19-1-1',
+            title: 'Nexus IQ Server Docker 배포 + Nexus Repository 연동',
+            description: 'sonatype/nexus-iq-server Docker Compose (포트 8070). Nexus Repository Admin에서 IQ Server URL 연결. Organization/Application 구조 설정 (jette-platform / fass-api, fass-frontend)',
+            priority: 'high', status: 'todo', assigneeRole: '인프라',
+            techStack: ['Nexus IQ', 'Docker', 'Nexus Repository'],
+            guideRef: 'SCA 인프라 구성',
+            estimatedDays: 2,
+            subTasks: [
+              { id: 'st19-1-1-1', title: 'Nexus IQ Docker Compose + 볼륨 마운트', status: 'todo' },
+              { id: 'st19-1-1-2', title: 'Nexus Repository ↔ IQ Server 연결 설정', status: 'todo' },
+              { id: 'st19-1-1-3', title: 'Organization / Application 등록', status: 'todo' },
+            ],
+          },
+          {
+            id: 't19-1-2',
+            title: 'SCA 정책 정의 + Firewall Quarantine 설정',
+            description: 'IQ Policy: Security-Critical → fail, Security-High → warn, License-GPL3/AGPL3 → fail. maven-central-proxy + npmjs-proxy Quarantine 활성화',
+            priority: 'high', status: 'todo', assigneeRole: '보안·PL',
+            techStack: ['Nexus IQ', 'Policy'],
+            guideRef: 'OSS 보안 정책',
+            estimatedDays: 2,
+            subTasks: [
+              { id: 'st19-1-2-1', title: 'CVE 기반 차단 정책 (Critical/High 임계값 설정)', status: 'todo' },
+              { id: 'st19-1-2-2', title: '라이선스 Deny 목록 정의 (GPL-3.0, AGPL-3.0, SSPL)', status: 'todo' },
+              { id: 'st19-1-2-3', title: 'Quarantine 예외(Waiver) 승인 프로세스 문서화', status: 'todo' },
+            ],
+          },
+          {
+            id: 't19-1-3',
+            title: 'Jenkins Pipeline SCA 스캔 스테이지 (Gradle + npm)',
+            description: 'Jenkinsfile에 "SCA Scan" 스테이지 추가. nexusScan Gradle task + npm audit 동시 실행. Critical 발견 시 빌드 실패 + IQ 리포트 URL Jenkins 로그 출력',
+            priority: 'high', status: 'todo', assigneeRole: '인프라',
+            techStack: ['Jenkins', 'Gradle', 'npm'],
+            guideRef: '15.2절 Jenkins CI/CD',
+            estimatedDays: 2,
+            subTasks: [
+              { id: 'st19-1-3-1', title: 'Gradle nexusScan 플러그인 fass-bom 적용', status: 'todo' },
+              { id: 'st19-1-3-2', title: 'Jenkins Pipeline SCA 스테이지 + Mattermost 알림', status: 'todo' },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'us19-2',
+        asA: '개발 팀장(PL)',
+        iWantTo: '매 릴리즈마다 어떤 오픈소스 컴포넌트가 포함됐는지 SBOM으로 즉시 확인하고, 새 CVE 발견 시 영향 받는 배포 버전을 빠르게 파악하고 싶다',
+        soThat: 'Log4Shell 같은 긴급 취약점 발생 시 어떤 서비스·버전이 영향받는지 30분 이내에 파악하고 대응 범위를 결정할 수 있다',
+        asBefore: '어떤 라이브러리 버전이 운영에 배포됐는지 코드를 일일이 확인해야 함. 긴급 CVE 발생 시 전 모듈 의존성 수동 조사에 수 시간 소요',
+        toBe: '릴리즈 Jenkins 파이프라인 → CycloneDX SBOM bom.json 자동 생성 → GitLab 릴리즈 아티팩트 첨부. 신규 CVE 발견 시 SBOM 파일로 영향 버전 5분 내 파악',
+        priority: 'high',
+        status: 'todo',
+        storyPoints: 8,
+        acceptanceCriteria: [
+          'Jenkins release 파이프라인 실행 시 bom.json 자동 생성 및 아티팩트 첨부',
+          'SBOM에 모든 runtimeClasspath 의존성 포함 (이름·버전·라이선스·purl)',
+          'GitLab 릴리즈 태그에 bom.json 첨부',
+          'Nexus IQ에 SBOM 제출 → 컴포넌트별 리스크 대시보드 확인 가능',
+        ],
+        tasks: [
+          {
+            id: 't19-2-1',
+            title: 'CycloneDX SBOM Gradle + npm 플러그인 설정',
+            description: 'org.cyclonedx.bom Gradle 플러그인 fass-bom 적용. @cyclonedx/cyclonedx-npm 프론트엔드 적용. bom.json 포맷, CycloneDX 1.5 스키마',
+            priority: 'high', status: 'todo', assigneeRole: '백엔드·프론트',
+            techStack: ['CycloneDX', 'Gradle', 'npm'],
+            guideRef: 'SBOM 관리 정책',
+            estimatedDays: 1,
+          },
+          {
+            id: 't19-2-2',
+            title: 'Jenkins Release 파이프라인 SBOM 자동 생성 + GitLab 첨부',
+            description: 'release 스테이지: cyclonedxBom task → bom.json archiveArtifacts → GitLab Release API로 첨부. Nexus IQ evaluate API로 SBOM 리스크 분석 결과 링크 출력',
+            priority: 'high', status: 'todo', assigneeRole: '인프라',
+            techStack: ['Jenkins', 'GitLab API', 'CycloneDX'],
+            guideRef: '15.2절 CI/CD Release',
+            estimatedDays: 2,
+          },
+        ],
+      },
+      {
+        id: 'us19-3',
+        asA: '백엔드 개발자',
+        iWantTo: 'build.gradle.kts에 OSS Index 분석기를 추가하여 로컬 개발 환경에서도 CVE 조회가 빠르게 되고, Nexus IQ 없이도 기본 SCA를 실행할 수 있길 바란다',
+        soThat: 'CI 스캔 결과를 기다리지 않고 로컬에서 빠르게 취약점을 확인하여 MR 전에 선제적으로 대응할 수 있다',
+        asBefore: 'CI OWASP 스캔은 NVD API 지연으로 20~30분 소요. 로컬 빠른 확인 방법 없음',
+        toBe: './gradlew dependencyCheckAnalyze (OSS Index 활성화) → 2~3분 내 취약점 리포트. HTML 리포트 브라우저 자동 오픈',
+        priority: 'medium',
+        status: 'todo',
+        storyPoints: 5,
+        acceptanceCriteria: [
+          './gradlew dependencyCheckAnalyze 3분 내 완료',
+          'OSS Index + NVD 이중 분석 결과 HTML 리포트 생성',
+          'Critical CVE 발견 시 빌드 실패 (failBuildOnCVSS=7.0)',
+          'OSS Index API Token Vault에서 주입 (소스코드 노출 없음)',
+        ],
+        tasks: [
+          {
+            id: 't19-3-1',
+            title: 'OWASP Dependency-Check OSS Index Analyzer 활성화',
+            description: 'fass-bom dependencyCheck 설정에 ossIndex analyzer 활성화. Vault에서 OSS_INDEX_USER, OSS_INDEX_TOKEN 주입. NVD + OSS Index 이중 분석 검증',
+            priority: 'medium', status: 'todo', assigneeRole: '백엔드',
+            techStack: ['OWASP', 'Sonatype OSS Index', 'Vault'],
+            guideRef: 'Sprint 19 골든셋 — OWASP 설정',
+            estimatedDays: 1,
+          },
+        ],
+      },
+    ],
+  },
+  // SPRINT 21 — BI 대시보드 (Apache Superset + Grafana)
+  // ══════════════════════════════════════════════════════════════
+  {
+    id: 'sprint-20', number: 21,
+    title: 'BI 대시보드 (Apache Superset + Grafana)',
+    subtitle: 'Business Intelligence & Monitoring Dashboard',
+    description: 'Apache Superset으로 비즈니스 데이터 분석·리포팅 대시보드를 구축하고, Grafana + Prometheus로 인프라·애플리케이션 실시간 모니터링 대시보드를 완성합니다. 데이터 가시성을 전사적으로 확보합니다.',
+    status: 'todo', priority: 'medium', duration: '3주', phase: '추가과제', category: 'additional',
+    guideSection: '12장 CDC·3.2절 인프라', icon: '📊',
+    techStack: ['Apache Superset', 'Grafana', 'Prometheus', 'PostgreSQL', 'Kafka', 'Node Exporter', 'Spring Boot Actuator'],
+    assignees: [심지훈, 오준열],
+    goal: {
+      summary: 'Superset으로 비즈니스 KPI를 셀프서비스 분석하고, Grafana로 인프라·앱 상태를 실시간 모니터링하여 운영 사각지대를 제거한다',
+      problem: '비즈니스 현황 파악을 위해 개발자에게 SQL 요청. 인프라 장애를 사용자 신고로 뒤늦게 인지. 서비스별 메트릭이 파편화되어 통합 뷰 없음',
+      objective: '① Superset: PostgreSQL 직접 연결 → 부서별 셀프서비스 데이터 분석. ② Grafana: Prometheus 메트릭 수집 → 서비스·인프라·DB·Kafka 통합 대시보드. ③ 알림: 임계치 초과 시 Mattermost 자동 알림',
+      deliverables: [
+        'Apache Superset Docker 배포 + PostgreSQL 데이터소스 연결',
+        'Superset 업무 대시보드 3종 (물류·재고·배차)',
+        'Grafana + Prometheus 통합 모니터링 대시보드',
+        'Spring Boot Actuator + Micrometer 메트릭 연동',
+        'Kafka Lag / Node Exporter / PostgreSQL Exporter 대시보드',
+        '임계치 알림 규칙 (Grafana Alert → Mattermost)',
+      ],
+      dependencies: ['Sprint 11 완료 (CDC·Kafka)', 'Sprint 2 완료 (Redis·공통 플랫폼)'],
+    },
+    ossDetails: [
+      {
+        name: 'Apache Superset',
+        version: 'Apache Superset 3.x (OSS)',
+        role: '비즈니스 데이터 분석 및 셀프서비스 BI 대시보드 — PostgreSQL·MySQL 등 다중 데이터소스 연결, SQL 기반 차트·대시보드 제작',
+        why: '기존 방식: 분석 요청 → 개발자 SQL 작성 → 결과 전달 (수 시간~수 일 소요). Superset 도입으로 비즈니스 담당자가 직접 차트를 만들고 대시보드를 구성 → 데이터 민주화. 완전 오픈소스이며 PostgreSQL·Kafka·Druid 등 FaSS 스택과 네이티브 통합',
+        setupSteps: [
+          '① Docker Compose로 Superset 기동: apache/superset:latest, PostgreSQL 메타DB, Redis 캐시',
+          '② 초기 설정: superset db upgrade → superset init → Admin 계정 생성',
+          '③ 데이터소스(Database) 연결: SQLAlchemy URI → postgresql://user:pw@postgres:5432/fass_db',
+          '④ Dataset 생성: TB_ORDER·TB_STOCK·TB_DELIVERY 테이블 또는 SQL 뷰 등록',
+          '⑤ Chart 제작: Bar Chart(일별 주문량), Line Chart(재고 추이), Table Chart(배차 현황)',
+          '⑥ Dashboard 구성: 차트 조합 → 필터 패널(날짜·법인·창고) → 대시보드 공유 URL',
+          '⑦ Row-Level Security: COMPANY_CD 기반 법인별 데이터 접근 제어',
+          '⑧ 정기 리포트: 이메일 스케줄 발송 (Celery Beat + 이메일 서버 설정)',
+          '⑨ Nginx 역방향 프록시 + HTTPS 적용 (superset.jette.com)',
+        ],
+        keyConfig: `# docker-compose.yml (Superset)
+services:
+  superset:
+    image: apache/superset:latest
+    container_name: superset
+    restart: always
+    ports:
+      - "8088:8088"
+    environment:
+      - SUPERSET_SECRET_KEY=your-secret-key
+      - DATABASE_URL=postgresql+psycopg2://superset:superset@superset-db:5432/superset
+    depends_on:
+      - superset-db
+      - redis
+  superset-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+  redis:
+    image: redis:7-alpine
+
+# SQLAlchemy 데이터소스 연결 (FaSS DB)
+postgresql+psycopg2://fass_ro:password@postgres:5432/fass_db
+# Row-Level Security 예시
+[COMPANY_CD] = '{{ current_user_attribute("company_cd") }}'`,
+        pitfalls: [
+          'Superset DB 연결 계정은 반드시 읽기 전용(SELECT만 허용) — INSERT/UPDATE/DELETE 권한 부여 금지',
+          'Row-Level Security 미설정 시 모든 법인 데이터 노출 → COMPANY_CD 기반 RLS 필수 적용',
+          'Celery Worker 미기동 시 대용량 쿼리 캐시·이메일 발송 불가 → Celery Worker 컨테이너 필수',
+          'Superset 비밀키(SUPERSET_SECRET_KEY) 미변경 시 세션 토큰 위변조 취약 → 운영 배포 전 반드시 변경',
+          '차트 쿼리 최적화 미흡 시 PostgreSQL 풀 스캔으로 운영 DB 부하 → 읽기 전용 복제본(Read Replica) 또는 집계 테이블 권장',
+        ],
+        references: ['Apache Superset 공식 문서', '12장 CDC 데이터 동기화', '13.2절 데이터 격리'],
+      },
+      {
+        name: 'Grafana + Prometheus',
+        version: 'Grafana 10.x OSS / Prometheus 2.x',
+        role: '인프라·애플리케이션·Kafka·DB 메트릭 수집 및 실시간 모니터링 대시보드 — 임계치 초과 시 Mattermost 알림',
+        why: 'Spring Boot Actuator·Micrometer로 앱 메트릭(응답시간·에러율·JVM Heap) 노출 → Prometheus Pull 수집 → Grafana 시각화. Kafka Lag·Nexus 디스크·PostgreSQL 커넥션 풀까지 단일 Grafana 인터페이스에서 통합 관리. 완전 오픈소스, Kubernetes와도 네이티브 통합',
+        setupSteps: [
+          '① Docker Compose: prometheus, grafana, node-exporter, postgres-exporter, kafka-exporter 서비스 구성',
+          '② Prometheus prometheus.yml: scrape_configs에 Spring Boot·Nexus·Node·PostgreSQL·Kafka exporter 엔드포인트 등록',
+          '③ Spring Boot: spring-boot-starter-actuator + micrometer-registry-prometheus 의존성 추가',
+          '④ application.yml: management.endpoints.web.exposure.include=health,metrics,prometheus',
+          '⑤ Grafana → Prometheus 데이터소스 추가 (http://prometheus:9090)',
+          '⑥ 공식 대시보드 임포트: Spring Boot 대시보드(ID:11378), JVM 대시보드(ID:4701), Kafka 대시보드(ID:7589), Node Exporter(ID:1860)',
+          '⑦ PostgreSQL Exporter 배포 + pg_stat_statements 대시보드 구성',
+          '⑧ Grafana Alert Rule 설정: CPU 80%↑·Heap 90%↑·Kafka Lag 1000↑ → Mattermost Webhook 알림',
+          '⑨ Nginx 역방향 프록시 + HTTPS (grafana.jette.com)',
+        ],
+        keyConfig: `# prometheus.yml (주요 scrape 설정)
+scrape_configs:
+  - job_name: 'spring-boot'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['fass-api:8080', 'fass-batch:8090']
+
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'nexus'
+    metrics_path: '/service/metrics/prometheus'
+    static_configs:
+      - targets: ['nexus:8081']
+
+# Spring Boot application.yml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  metrics:
+    tags:
+      application: \${spring.application.name}`,
+        pitfalls: [
+          'Prometheus /actuator/prometheus 엔드포인트를 외부에 노출 금지 — Spring Security로 내부망만 허용',
+          'Grafana Admin 비밀번호 초기값(admin/admin) 반드시 변경 — 운영 배포 전 필수',
+          'Prometheus 보존 기간(retention) 기본 15일 → 운영 환경에서는 --storage.tsdb.retention.time=90d 설정 권장',
+          'Alert Rule 테스트 없이 운영 적용 시 알림 폭탄(Notification Storm) 발생 → Silence·그룹핑 규칙 먼저 설정',
+          'Kafka Exporter 미기동 시 Consumer Lag 모니터링 불가 → Lag 급증 = 처리 지연 조기 감지 필수',
+        ],
+        references: ['Grafana 공식 문서', 'Prometheus 공식 문서', 'Spring Boot Actuator 가이드', '4.3절 CI/CD 파이프라인'],
+      },
+    ],
+    userStories: [
+      {
+        id: 'us20-1',
+        asA: '비즈니스 담당자 / 운영팀',
+        iWantTo: 'Apache Superset에서 SQL 없이 차트를 만들고 법인별·창고별 물류 KPI 대시보드를 직접 구성하고 싶다',
+        soThat: '개발자에게 데이터 요청 없이 실시간 데이터를 셀프서비스로 분석하고, 경영진에게 대시보드 URL을 공유할 수 있다',
+        asBefore: '데이터 분석 필요 시 개발자에게 SQL 요청 → 수 시간~수 일 대기. 엑셀 수동 집계. 법인별 데이터 구분 없이 전체 노출',
+        toBe: 'Superset에서 TB_ORDER·TB_STOCK·TB_DELIVERY 데이터셋 직접 조회. 드래그앤드롭 차트 제작. COMPANY_CD Row-Level Security로 법인 격리',
+        priority: 'medium',
+        status: 'todo',
+        storyPoints: 8,
+        acceptanceCriteria: [
+          'Superset Docker 기동 및 PostgreSQL fass_db 데이터소스 연결 완료',
+          'TB_ORDER·TB_STOCK·TB_DELIVERY Dataset 등록 완료',
+          '물류 대시보드 3종 (일별 주문량/재고 추이/배차 현황) 차트 구성',
+          'COMPANY_CD Row-Level Security 적용 — 법인 A 계정으로 법인 B 데이터 조회 불가',
+          '주간 리포트 이메일 자동 발송 설정 (Celery Beat)',
+          'superset.jette.com HTTPS 접근 성공',
+        ],
+        tasks: [
+          {
+            id: 't20-1-1',
+            title: 'Apache Superset Docker Compose 배포',
+            description: 'apache/superset:latest, superset-db(PostgreSQL), Redis, Celery Worker/Beat. superset db upgrade → superset init → Admin 계정 생성. Nginx HTTPS 적용',
+            priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Superset', 'Docker', 'Redis'], guideRef: '3.5절', estimatedDays: 2,
+            subTasks: [
+              { id: 'st20-1-1-1', title: 'Docker Compose 작성 및 Superset 기동 확인', status: 'todo' },
+              { id: 'st20-1-1-2', title: 'Celery Worker + Beat 컨테이너 구성', status: 'todo' },
+              { id: 'st20-1-1-3', title: 'Nginx 역방향 프록시 + HTTPS (superset.jette.com)', status: 'todo' },
+            ],
+          },
+          {
+            id: 't20-1-2',
+            title: 'FaSS DB 데이터소스 연결 + Dataset 등록',
+            description: 'PostgreSQL 읽기 전용 계정 생성. SQLAlchemy URI 등록. TB_ORDER·TB_STOCK·TB_DELIVERY·TB_DISPATCH Dataset 등록. 집계 SQL 뷰 생성',
+            priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['PostgreSQL', 'Superset'], guideRef: '12장', estimatedDays: 2,
+            subTasks: [
+              { id: 'st20-1-2-1', title: 'PostgreSQL 읽기 전용 계정(superset_ro) 생성', status: 'todo' },
+              { id: 'st20-1-2-2', title: 'Dataset 4종 등록 (ORDER·STOCK·DELIVERY·DISPATCH)', status: 'todo' },
+              { id: 'st20-1-2-3', title: '집계 SQL 뷰 생성 (일별/주별/법인별)', status: 'todo' },
+            ],
+          },
+          {
+            id: 't20-1-3',
+            title: '물류 KPI 대시보드 3종 구성',
+            description: '① 주문 현황: 일별 주문량 Bar Chart, 법인별 파이 차트, 주문 상태 Funnel\n② 재고 추이: 창고별 재고 Line Chart, 안전재고 미달 Table\n③ 배차 현황: 배차율 Gauge, 지연 건수 Big Number, 기사별 운행 Table',
+            priority: 'high', status: 'todo', assigneeRole: '풀스택', techStack: ['Superset'], guideRef: '12장', estimatedDays: 3,
+          },
+          {
+            id: 't20-1-4',
+            title: 'Row-Level Security (COMPANY_CD 법인 격리)',
+            description: 'Superset RLS 규칙: [COMPANY_CD] = \'{{ current_user_attribute("company_cd") }}\'. 법인별 계정으로 교차 조회 불가 검증. 슈퍼 유저는 전체 조회 허용',
+            priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Superset', 'PostgreSQL'], guideRef: '13.2절', estimatedDays: 1,
+          },
+          {
+            id: 't20-1-5',
+            title: '주간 리포트 이메일 자동 발송 (Celery Beat)',
+            description: 'Celery Beat 스케줄: 매주 월요일 08:00 주간 KPI 대시보드 이미지 이메일 발송. SMTP 설정. 수신 그룹(경영진·팀장) 설정',
+            priority: 'medium', status: 'todo', assigneeRole: '인프라', techStack: ['Celery', 'Superset'], guideRef: '-', estimatedDays: 1,
+          },
+        ],
+      },
+      {
+        id: 'us20-2',
+        asA: '인프라 / 운영팀',
+        iWantTo: 'Grafana + Prometheus로 Spring Boot 앱·Kafka·PostgreSQL·인프라 서버의 메트릭을 단일 대시보드에서 통합 모니터링하고, 임계치 초과 시 Mattermost 알림을 받고 싶다',
+        soThat: '장애가 사용자 신고 전에 선제적으로 감지되고, 서비스별 상태를 실시간으로 파악하여 MTTR(평균 복구 시간)을 단축할 수 있다',
+        asBefore: '서버 접속 후 top/df 명령으로 수동 확인. 사용자 신고 후 장애 인지. 서비스별 메트릭 파편화',
+        toBe: 'Grafana 단일 화면에서 JVM Heap·응답시간·Kafka Lag·DB 커넥션풀·CPU·디스크 통합 조회. CPU 80% 초과 시 Mattermost 자동 알림',
+        priority: 'high',
+        status: 'todo',
+        storyPoints: 8,
+        acceptanceCriteria: [
+          'Prometheus + Grafana Docker 기동 및 데이터소스 연결 완료',
+          'Spring Boot /actuator/prometheus 메트릭 Prometheus 수집 확인',
+          'Grafana 대시보드 4종: Spring Boot / JVM / Kafka / Node Exporter',
+          'PostgreSQL Exporter 연동 — 커넥션 풀·슬로우 쿼리 패널 구성',
+          'Alert Rule 3종 설정 (CPU 80%↑, Heap 90%↑, Kafka Lag 1000↑) → Mattermost 알림 수신',
+          'grafana.jette.com HTTPS 접근 성공',
+        ],
+        tasks: [
+          {
+            id: 't20-2-1',
+            title: 'Prometheus + Grafana + Exporter Docker Compose 구성',
+            description: 'prometheus, grafana, node-exporter, postgres-exporter(wrouesnel/postgres_exporter), kafka-exporter(danielqsj/kafka-exporter) 서비스 구성. prometheus.yml scrape_configs 등록',
+            priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Prometheus', 'Grafana', 'Docker'], guideRef: '3.5절', estimatedDays: 2,
+            subTasks: [
+              { id: 'st20-2-1-1', title: 'Docker Compose 작성 및 각 서비스 기동 확인', status: 'todo' },
+              { id: 'st20-2-1-2', title: 'prometheus.yml scrape 설정 (5종 엔드포인트)', status: 'todo' },
+              { id: 'st20-2-1-3', title: 'Grafana Prometheus 데이터소스 연결', status: 'todo' },
+            ],
+          },
+          {
+            id: 't20-2-2',
+            title: 'Spring Boot Actuator + Micrometer Prometheus 메트릭 연동',
+            description: 'spring-boot-starter-actuator + micrometer-registry-prometheus 의존성. management.endpoints 설정. Spring Security: /actuator/prometheus 내부망만 허용. 커스텀 메트릭(주문 처리 건수, 배치 실행 시간) 추가',
+            priority: 'high', status: 'todo', assigneeRole: '백엔드', techStack: ['Spring Boot', 'Micrometer', 'Prometheus'], guideRef: '4.3절', estimatedDays: 2,
+            subTasks: [
+              { id: 'st20-2-2-1', title: 'Actuator + Micrometer 의존성 추가 및 설정', status: 'todo' },
+              { id: 'st20-2-2-2', title: 'Spring Security: /actuator/prometheus 내부망 허용', status: 'todo' },
+              { id: 'st20-2-2-3', title: '커스텀 메트릭 (Counter/Timer) 비즈니스 지표 추가', status: 'todo' },
+            ],
+          },
+          {
+            id: 't20-2-3',
+            title: 'Grafana 공식 대시보드 4종 임포트',
+            description: '① Spring Boot 대시보드 (ID:11378) — 응답시간·에러율·HTTP 상태 코드\n② JVM Micrometer (ID:4701) — Heap/NonHeap·GC·스레드\n③ Kafka Overview (ID:7589) — 파티션·Lag·처리량\n④ Node Exporter Full (ID:1860) — CPU·메모리·디스크·네트워크',
+            priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Grafana'], guideRef: '-', estimatedDays: 2,
+          },
+          {
+            id: 't20-2-4',
+            title: 'PostgreSQL Exporter 대시보드 + 슬로우 쿼리 패널',
+            description: 'postgres-exporter 배포. pg_stat_statements 활성화. Grafana PostgreSQL 대시보드: 커넥션 풀 사용률·트랜잭션 TPS·슬로우 쿼리(5초↑) 목록 패널',
+            priority: 'medium', status: 'todo', assigneeRole: '인프라', techStack: ['PostgreSQL', 'Grafana'], guideRef: '3.2절', estimatedDays: 2,
+          },
+          {
+            id: 't20-2-5',
+            title: 'Grafana Alert Rule + Mattermost 알림 연동',
+            description: '① CPU 사용률 80%↑ 5분 지속 → CRITICAL\n② JVM Heap 90%↑ → WARNING\n③ Kafka Consumer Lag 1000↑ → WARNING\n④ Disk 사용률 85%↑ → WARNING\nMattermost Incoming Webhook 설정. 알림 그룹핑·Silence 규칙 설정',
+            priority: 'high', status: 'todo', assigneeRole: '인프라', techStack: ['Grafana', 'Mattermost'], guideRef: '4.3절', estimatedDays: 2,
+            subTasks: [
+              { id: 'st20-2-5-1', title: 'Mattermost Incoming Webhook URL 발급', status: 'todo' },
+              { id: 'st20-2-5-2', title: 'Alert Rule 4종 설정 (CPU/Heap/Lag/Disk)', status: 'todo' },
+              { id: 'st20-2-5-3', title: '알림 테스트 및 Silence·그룹핑 규칙 검증', status: 'todo' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
+
+// ── 통계 ──────────────────────────────────────────────────────
+
+
+
+export const SPRINT_STATS = {
+  total:      SPRINTS.length,
+  main:       SPRINTS.filter((s) => s.category !== 'additional').length,
+  additional: SPRINTS.filter((s) => s.category === 'additional').length,
+  done:       SPRINTS.filter((s) => s.status === 'done').length,
+  inProgress: SPRINTS.filter((s) => s.status === 'in-progress').length,
+  todo:       SPRINTS.filter((s) => s.status === 'todo').length,
+};
+
+export function calcSprintProgress(sprint: (typeof SPRINTS)[number]): number {
+  const allTasks = sprint.userStories.flatMap((us) => us.tasks);
+  if (!allTasks.length) return 0;
+  const done = allTasks.filter((t) => t.status === 'done').length;
+  return Math.round((done / allTasks.length) * 100);
+}
+
+export function calcStoryPoints(sprint: (typeof SPRINTS)[number]) {
+  const total = sprint.userStories.reduce((s, us) => s + (us.storyPoints ?? 0), 0);
+  const done = sprint.userStories.filter((us) => us.status === 'done').reduce((s, us) => s + (us.storyPoints ?? 0), 0);
+  return { total, done };
+}
