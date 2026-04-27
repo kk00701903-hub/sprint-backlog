@@ -151,13 +151,13 @@ export const TEAM_MEMBERS: Assignee[] = [
 ];
 
 export const PHASE_OPTIONS = [
-  { value: 'all',     label: '전체' },
-  { value: 'Phase 0', label: 'Phase 0' },
-  { value: 'Phase 1', label: 'Phase 1' },
-  { value: 'Phase 2', label: 'Phase 2' },
-  { value: 'Phase 3', label: 'Phase 3' },
-  { value: 'Phase 4', label: 'Phase 4' },
-  { value: '추가과제', label: '추가과제' },
+  { value: 'all',                    label: '전체' },
+  { value: '1단계: 인프라·표준 규격', label: '1단계: 인프라·표준 규격' },
+  { value: '2단계: 보안·공통 모듈',  label: '2단계: 보안·공통 모듈' },
+  { value: '3단계: 생산성·UI 표준',  label: '3단계: 생산성·UI 표준' },
+  { value: '4단계: 외부 연동·데이터', label: '4단계: 외부 연동·데이터' },
+  { value: '5단계: 데이터 보안·최적화', label: '5단계: 데이터 보안·최적화' },
+  { value: '추가과제',               label: '추가과제' },
 ];
 
 export const DETAIL_TABS = ['목표', '유저스토리', '태스크', 'OSS 상세'] as const;

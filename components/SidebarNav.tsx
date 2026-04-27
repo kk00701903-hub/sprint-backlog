@@ -12,12 +12,13 @@ interface SidebarNavProps {
 }
 
 export function SidebarNav({ activeSidebarId, onSidebarSelect, selectedSprintId }: SidebarNavProps) {
-  // 주요 스프린트 그룹 (Phase 0~3)
+  // 주요 스프린트 그룹 (1단계~5단계)
   const phaseGroups = [
-    { phase: 'Phase 0', label: 'Phase 0 — 기반 인프라',    sprints: SPRINTS.filter((s) => s.phase === 'Phase 0') },
-    { phase: 'Phase 1', label: 'Phase 1 — 인증/보안/권한', sprints: SPRINTS.filter((s) => s.phase === 'Phase 1') },
-    { phase: 'Phase 2', label: 'Phase 2 — 아키텍처/공통',  sprints: SPRINTS.filter((s) => s.phase === 'Phase 2') },
-    { phase: 'Phase 3', label: 'Phase 3 — 데이터/통합',    sprints: SPRINTS.filter((s) => s.phase === 'Phase 3') },
+    { phase: '1단계: 인프라·표준 규격', label: '1단계 — 인프라·표준 규격',    sprints: SPRINTS.filter((s) => s.phase === '1단계: 인프라·표준 규격') },
+    { phase: '2단계: 보안·공통 모듈',  label: '2단계 — 보안·공통 모듈',     sprints: SPRINTS.filter((s) => s.phase === '2단계: 보안·공통 모듈') },
+    { phase: '3단계: 생산성·UI 표준',  label: '3단계 — 생산성·UI 표준',     sprints: SPRINTS.filter((s) => s.phase === '3단계: 생산성·UI 표준') },
+    { phase: '4단계: 외부 연동·데이터', label: '4단계 — 외부 연동·데이터',   sprints: SPRINTS.filter((s) => s.phase === '4단계: 외부 연동·데이터') },
+    { phase: '5단계: 데이터 보안·최적화', label: '5단계 — 데이터 보안·최적화', sprints: SPRINTS.filter((s) => s.phase === '5단계: 데이터 보안·최적화') },
   ];
 
   // 추가과제 스프린트
